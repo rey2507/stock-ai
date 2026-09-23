@@ -18,6 +18,25 @@ def render_expiry_dashboard(snap: MarketSnapshot) -> None:
         st.error("No data available.")
         return
 
+    # Show main verdict at top
+    try:
+        from engines.intraday_verdict_v2 import compute_verdict
+        from utils.ui import render_verdict_header, verdict_panel, contribution_panel, what_changed_panel
+        
+        result = compute_verdict(snap)
+        result.persistence = snap.persistence if hasattr(snap, 'persistence') and snap.persistence else ""
+        result.expiry_context = snap.expiry_context if hasattr(snap, 'expiry_context') and snap.expiry_context else ""
+        result.market_regime = snap.market_regime if hasattr(snap, 'market_regime') and snap.market_regime else ""
+        result.trend_strength = snap.trend_strength if hasattr(snap, 'trend_strength') and snap.trend_strength else 0
+        
+        render_verdict_header(result, snap)
+        what_changed_panel(result)
+        contribution_panel(result)
+        verdict_panel(result)
+        st.markdown("---")
+    except Exception as e:
+        st.caption(f"Verdict unavailable: {e}")
+
     # Get option chain data from NSEOptionsProvider
     # The snapshot should have option chain data if NSEOptionsProvider succeeded
     from providers.registry import get_provider

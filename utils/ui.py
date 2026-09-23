@@ -63,9 +63,10 @@ def render_verdict_header(v: Verdict, snap: MarketSnapshot) -> None:
     
     Layout:
     - Main verdict with color coding
+    - Score and trend strength as prominent metrics
     - Evidence strength line
     - Context line (persistence, regime, expiry)
-    - Score and data quality with tooltip
+    - Data quality with tooltip
     """
     color_map = {
         "BULLISH": "green", "BEARISH": "red",
@@ -102,6 +103,9 @@ def render_verdict_header(v: Verdict, snap: MarketSnapshot) -> None:
     quality_explanation = data_quality_tooltip(snap)
     quality_tooltip = f"Data Quality: {v.data_quality} ⓘ<br><small>{quality_explanation}</small>"
     
+    score_color = "green" if v.raw_score > 0 else ("red" if v.raw_score < 0 else "orange")
+    strength_color = "green" if v.trend_strength >= 70 else ("orange" if v.trend_strength >= 40 else "red")
+    
     html = f"""
     <div style="padding:1.2rem;border-radius:10px;background:{bg};border-left:5px solid {color};margin-bottom:0.5rem;">
         <span style="font-size:1.4em;font-weight:bold">{v.emoji} {v.display_label}</span>
@@ -109,14 +113,17 @@ def render_verdict_header(v: Verdict, snap: MarketSnapshot) -> None:
         <span style="font-size:0.95em;color:#333">{strength_str}</span>
         <br>
         <span style="font-size:0.85em;color:#555">{ctx_str}</span>
-        <br>
-        <span style="font-size:0.8em;color:#666">
-            Score: {v.raw_score:+d} · 
-            <span title="{quality_explanation}">{quality_tooltip}</span>
-        </span>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        colored_metric("Score", f"{v.raw_score:+d}", score_color)
+    with col2:
+        colored_metric("Trend Strength", f"{v.trend_strength}/100", strength_color)
+    with col3:
+        st.markdown(f"<div style='margin-bottom:0.75rem;'><div style='font-size:0.85rem; color:#444;'>Data Quality</div><div style='font-size:1.25rem; font-weight:bold;'><span title='{quality_explanation}'>{v.data_quality} ⓘ</span></div></div>", unsafe_allow_html=True)
 
 
 def _field_display_value(fm: FieldMeta) -> tuple[str, str, str]:
