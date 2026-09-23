@@ -240,6 +240,9 @@ class MarketSnapshot:
     theta_decay_schedules: Optional[dict[str, list["ThetaDecayDay"]]] = None
     # Format: {"NIFTY_{strike}{CE/PE}_{expiry}": [ThetaDecayDay, ...]}
 
+    # --- Suitability Scoring (Phase E) ---
+    suitability_scores: Optional[List["SuitabilityScore"]] = None
+
     def is_field_available(self, field_name: str) -> bool:
         """Check if a field has valid, available data."""
         fm: FieldMeta = getattr(self, field_name, None)

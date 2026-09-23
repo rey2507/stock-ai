@@ -91,6 +91,14 @@ def render_expiry_dashboard(snap: MarketSnapshot) -> None:
     except Exception as e:
         st.caption(f"Expected move analysis unavailable: {e}")
 
+    # Phase E: Option Suitability Ranking
+    st.markdown("---")
+    st.subheader("✅ Option Suitability Ranking")
+    try:
+        _render_suitability_ranking(chain_snap, atm_strike)
+    except Exception as e:
+        st.caption(f"Suitability analysis unavailable: {e}")
+
 
 def _render_expected_move_analysis(chain_snap: MarketSnapshot, atm_strike: Optional[float]) -> None:
     """Render expected move analysis for option contracts."""
@@ -154,6 +162,69 @@ def _render_expected_move_analysis(chain_snap: MarketSnapshot, atm_strike: Optio
     if all_analyses:
         st.subheader("📊 Contract Comparison")
         render_expected_move_comparison_table(all_analyses)
+
+
+def _render_suitability_ranking(chain_snap: MarketSnapshot, atm_strike: Optional[float]) -> None:
+    """Render option suitability ranking."""
+    from providers.suitability_calculator import SuitabilityCalculator
+    from providers.contract_ranker import ContractRanker
+    from utils.suitability_display import render_suitability_ranking, render_suitability_score
+
+    greeks_by_strike = getattr(chain_snap, "greeks_by_strike", None)
+    if not greeks_by_strike:
+        st.caption("Greeks data not available. Ensure GreeksProvider is registered and data is fresh.")
+        return
+
+    analyzer = SuitabilityCalculator(config={})
+    all_scores = []
+
+    for strike, expiries in greeks_by_strike.items():
+        for expiry_date, results in expiries.items():
+            for result in results:
+                try:
+                    expected_move = chain_snap.expected_move_analysis.get(strike, {}).get(expiry_date, [None])[0] if hasattr(chain_snap, "expected_move_analysis") and chain_snap.expected_move_analysis else None
+                    if expected_move is None:
+                        from providers.expected_move_analyzer import ExpectedMoveAnalyzer
+                        ema = ExpectedMoveAnalyzer(config={})
+                        expected_move = ema.analyze_contract(
+                            strike=result.strike,
+                            spot=result.spot,
+                            days_to_expiry=result.days_to_expiry,
+                            implied_vol=result.implied_vol,
+                            option_type=result.option_type,
+                            current_premium=result.premium,
+                            theta_daily=result.theta,
+                            delta=result.delta,
+                            vega=result.vega,
+                        )
+
+                    score = analyzer.calculate_suitability(
+                        strike=result.strike,
+                        spot=result.spot,
+                        option_type=result.option_type,
+                        days_to_expiry=result.days_to_expiry,
+                        expiry_date=expiry_date,
+                        current_premium=result.premium,
+                        implied_vol=result.implied_vol,
+                        greeks_result=result,
+                        expected_move_analysis=expected_move,
+                        market_view="BULLISH",
+                        holding_period_days=result.days_to_expiry,
+                        risk_tolerance="MEDIUM",
+                    )
+                    all_scores.append(score)
+                except Exception as e:
+                    log.warning(f"Suitability calculation failed for {result.option_type} {result.strike}: {e}")
+
+    if not all_scores:
+        st.caption("No suitability scores available.")
+        return
+
+    render_suitability_ranking(all_scores)
+
+    top_score = max(all_scores, key=lambda s: s.overall_score)
+    st.subheader(f"🎯 Top Recommendation: {top_score.option_type} {top_score.strike:.0f}")
+    render_suitability_score(top_score)
 
 
 def _render_option_chain_heatmap(snap: MarketSnapshot, atm_strike: Optional[float]) -> None:
