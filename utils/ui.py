@@ -1,5 +1,6 @@
 """Shared UI helpers. Consumes only MarketSnapshot and Verdict."""
 
+import math
 import streamlit as st
 from models.snapshot import MarketSnapshot, FieldMeta
 from models.verdict import Verdict
@@ -7,17 +8,154 @@ from providers.data_quality import DataQualityEngine
 from utils.history_ui import trend_strength_label
 
 
-def _render_flow_group(items: list[tuple[str, FieldMeta, str, str]]) -> None:
-    """Render a group of flow metrics (FII or DII) with consistent formatting.
-    
-    items: list of (label, field_meta, prefix, suffix)
-    """
-    for label, fm, prefix, suffix in items:
-        display, status, color = _field_display_value(fm)
-        if "Unav" in display:
-            colored_metric(label, display, "gray", status)
+def _direction_state(change_pct) -> str:
+    """Return deterministic direction state from change percentage."""
+    if change_pct is None:
+        return "Flat"
+    if change_pct > 0:
+        return "Rising"
+    if change_pct < 0:
+        return "Falling"
+    return "Flat"
+
+
+def _change_points(current_value, change_pct) -> str:
+    """Compute change in points from current value and percentage change."""
+    if current_value is None or change_pct is None:
+        return "--"
+    if change_pct == 0:
+        return "+0.00 pts"
+    prev = current_value / (1 + change_pct / 100)
+    points = current_value - prev
+    sign = "+" if points >= 0 else ""
+    return f"{sign}{points:,.2f} pts"
+
+
+def _render_index_card(label: str, spot_fm: FieldMeta, change_pct_fm: FieldMeta, nifty_direction: str) -> None:
+    """Render a single related-index card with value, change %, points, status, and NIFTY confirmation."""
+    spot_val = spot_fm.value if isinstance(spot_fm, FieldMeta) else None
+    change_pct = change_pct_fm.value if isinstance(change_pct_fm, FieldMeta) else None
+    status = change_pct_fm.status if isinstance(change_pct_fm, FieldMeta) else "UNAVAILABLE"
+
+    if spot_val is None and change_pct is None:
+        st.caption(f"**{label}**\n--\n--\n--\nUNAVAILABLE")
+        return
+
+    spot_display = f"{spot_val:,.2f}" if spot_val is not None else "--"
+    pct_display = f"{change_pct:+.2f}%" if change_pct is not None else "--"
+    points_display = _change_points(spot_val, change_pct)
+    direction = _direction_state(change_pct)
+    status_label = status if status else "UNAVAILABLE"
+
+    confirmation = ""
+    if nifty_direction and change_pct is not None:
+        idx_dir = "up" if change_pct > 0 else ("down" if change_pct < 0 else "flat")
+        if idx_dir == nifty_direction:
+            confirmation = "✓ Confirming NIFTY"
+        elif idx_dir == "flat" or nifty_direction == "flat":
+            confirmation = "↔ Neutral"
         else:
-            colored_metric(label, f"{prefix}{display} {suffix}", color, status)
+            confirmation = "↔ Diverging from NIFTY"
+
+    color = "green" if (change_pct or 0) > 0 else ("red" if (change_pct or 0) < 0 else "gray")
+
+    st.markdown(
+        f"<div style='padding:0.5rem;border-radius:6px;border:1px solid #ddd;margin-bottom:0.5rem;'>"
+        f"<div style='font-size:0.8rem;color:#666;'>{label}</div>"
+        f"<div style='font-size:1.1rem;font-weight:bold;'>{spot_display}</div>"
+        f"<div style='font-size:0.85rem;color:{color};'>{pct_display} · {points_display}</div>"
+        f"<div style='font-size:0.75rem;color:#888;'>{direction} · {status_label}</div>"
+        f"{'<div style=\"font-size:0.75rem;color:#888;margin-top:2px;\">' + confirmation + '</div>' if confirmation else ''}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def render_related_indices_section(snap: MarketSnapshot) -> None:
+    """Render Related Indices section with cards and confirmation summary."""
+    nifty_direction = None
+    if snap.is_field_available("nifty_change_pct"):
+        nifty_change = snap.nifty_change_pct.value
+        if nifty_change is not None:
+            nifty_direction = "up" if nifty_change > 0 else ("down" if nifty_change < 0 else "flat")
+
+    domestic_indices = []
+    for field_name, label in [
+        ("sensex_spot", "sensex_change_pct", "Sensex"),
+        ("banknifty_spot", "banknifty_change_pct", "Bank Nifty"),
+    ]:
+        spot_fm = getattr(snap, field_name, None)
+        change_fm = getattr(snap, field_name.replace("_spot", "_change_pct"), None)
+        if isinstance(spot_fm, FieldMeta) and isinstance(change_fm, FieldMeta):
+            if spot_fm.value is not None or change_fm.value is not None:
+                domestic_indices.append((label, spot_fm, change_fm))
+
+    gift_spot = getattr(snap, "giftnifty_spot", None)
+    gift_change = getattr(snap, "giftnifty_change_pct", None)
+    gift_available = isinstance(gift_spot, FieldMeta) and isinstance(gift_change, FieldMeta) and (gift_spot.value is not None or gift_change.value is not None)
+
+    if domestic_indices or gift_available:
+        st.subheader("Related Indices")
+
+        if domestic_indices:
+            st.markdown("**Domestic Indices**")
+            cols = st.columns(min(len(domestic_indices), 3))
+            for idx, (label, spot_fm, change_fm) in enumerate(domestic_indices):
+                with cols[idx % 3]:
+                    _render_index_card(label, spot_fm, change_fm, nifty_direction)
+
+        if gift_available:
+            st.markdown("**Overnight / Pre-market Context**")
+            _render_index_card("GIFT Nifty", gift_spot, gift_change, None)
+
+        if domestic_indices:
+            st.markdown("**Related Indices Confirmation**")
+            directions = []
+            for _, spot_fm, change_fm in domestic_indices:
+                change_pct = change_fm.value if isinstance(change_fm, FieldMeta) else None
+                if change_pct is not None:
+                    directions.append("up" if change_pct > 0 else ("down" if change_pct < 0 else "flat"))
+
+            if not directions:
+                st.caption("INSUFFICIENT DATA")
+            elif not nifty_direction or nifty_direction == "flat":
+                st.caption("INSUFFICIENT DATA")
+            else:
+                confirming = sum(1 for d in directions if d == nifty_direction)
+                diverging = sum(1 for d in directions if d != nifty_direction and d != "flat")
+                neutral = sum(1 for d in directions if d == "flat")
+
+                if confirming == len(directions):
+                    state = "CONFIRMING"
+                    emoji = "🟢"
+                elif diverging == len(directions):
+                    state = "DIVERGING"
+                    emoji = "🔴"
+                elif confirming > diverging:
+                    state = "MIXED"
+                    emoji = "🟡"
+                elif diverging > confirming:
+                    state = "MIXED"
+                    emoji = "🟡"
+                else:
+                    state = "MIXED"
+                    emoji = "🟡"
+
+                if state == "CONFIRMING":
+                    explanation = "All available domestic indices are moving in the same direction as NIFTY."
+                elif state == "DIVERGING":
+                    explanation = "All available domestic indices are moving opposite to NIFTY."
+                else:
+                    up_names = [label for label, _, cf in domestic_indices if cf.value is not None and cf.value > 0]
+                    down_names = [label for label, _, cf in domestic_indices if cf.value is not None and cf.value < 0]
+                    parts = []
+                    if up_names:
+                        parts.append(f"{', '.join(up_names)} positive")
+                    if down_names:
+                        parts.append(f"{', '.join(down_names)} negative")
+                    explanation = f"Cross-index confirmation is mixed: {'; '.join(parts)}."
+
+                st.caption(f"**{emoji} {state}**\n{explanation}")
 
 
 def data_quality_tooltip(snap: MarketSnapshot) -> str:

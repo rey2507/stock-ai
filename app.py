@@ -20,7 +20,7 @@ from providers.merger import merge_snapshots
 from providers.streaming import get_streaming_manager
 from utils.market_hours import market
 from utils.ui_production import render_production_sidebar
-from utils.ui import data_source_banner, verdict_panel, component_table, evidence_detail, contribution_panel, _field_display_value, colored_metric, render_verdict_header, data_quality_tooltip
+from utils.ui import data_source_banner, verdict_panel, component_table, evidence_detail, contribution_panel, _field_display_value, colored_metric, render_verdict_header, data_quality_tooltip, render_related_indices_section
 from utils.history_ui import verdict_history_panel, what_changed_panel, compute_persistence, compute_expiry_context, compute_market_regime, compute_trend_strength
 from utils.expiry_ui import render_expiry_dashboard
 from utils.factor_card import render_factor_monitor, get_latest_factor_snapshot
@@ -284,17 +284,7 @@ def _render_intraday(snap: MarketSnapshot):
         colored_metric("India VIX", display, "gray", status)
 
     # Related indices
-    st.subheader("Related Indices")
-    rc1, rc2, rc3 = st.columns(3)
-    with rc1:
-        display, status, color = _field_display_value(snap.sensex_change_pct)
-        colored_metric("Sensex", display, color, status)
-    with rc2:
-        display, status, color = _field_display_value(snap.banknifty_change_pct)
-        colored_metric("Bank Nifty", display, color, status)
-    with rc3:
-        display, status, color = _field_display_value(snap.giftnifty_change_pct)
-        colored_metric("GIFT Nifty", display, color, status)
+    render_related_indices_section(snap)
 
     st.markdown("---")
     
@@ -648,17 +638,7 @@ def _render_weekly(snap: MarketSnapshot):
         colored_metric("Nifty Change %", display, color, status)
 
     # Related indices
-    st.subheader("Related Indices")
-    rc1, rc2, rc3 = st.columns(3)
-    with rc1:
-        display, status, color = _field_display_value(snap.sensex_change_pct)
-        colored_metric("Sensex", display, color, status)
-    with rc2:
-        display, status, color = _field_display_value(snap.banknifty_change_pct)
-        colored_metric("Bank Nifty", display, color, status)
-    with rc3:
-        display, status, color = _field_display_value(snap.giftnifty_change_pct)
-        colored_metric("GIFT Nifty", display, color, status)
+    render_related_indices_section(snap)
     
     # Sector Performance
     sectors = snap.get("sector_performance")
