@@ -1,0 +1,14 @@
+streamlit>=1.57
+pandas
+numpy
+python-dotenv
+nse
+nsepython
+yfinance
+nselib
+nsefin
+pyotp
+SmartApi
+requests
+plotly>=5.0.0
+scipy

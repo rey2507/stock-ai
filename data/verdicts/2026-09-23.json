@@ -1,0 +1,368 @@
+[
+  {
+    "timestamp": "2026-09-23T05:04:18.133112+00:00",
+    "direction": "BULLISH",
+    "state": "BIAS",
+    "raw_score": 2,
+    "conflict": false,
+    "data_quality": "Good",
+    "components": {
+      "Momentum": {
+        "score": 0,
+        "label": "Neutral",
+        "reason": "Mixed signals",
+        "evidence": [
+          "Price 23,402.80 below VWAP 23,408.24",
+          "RSI 53.0 > 50"
+        ],
+        "is_primary": true
+      },
+      "Volume": {
+        "score": 0,
+        "label": "Weak",
+        "reason": "Move on normal volume",
+        "evidence": [
+          "Relative volume: 0.57x average",
+          "Price moving down with normal/low volume \u2014 weak"
+        ],
+        "is_primary": false
+      },
+      "Futures": {
+        "score": 0,
+        "label": "Short-covering-type signal",
+        "reason": "Price \u2191 + OI \u2193",
+        "evidence": [
+          "Price change: +0.15%",
+          "OI change unavailable",
+          "Interpretation: Short-covering-type signal"
+        ],
+        "is_primary": true
+      },
+      "Options": {
+        "score": 1,
+        "label": "Bullish",
+        "reason": "1 bullish vs 0 bearish",
+        "evidence": [
+          "Call OI change: +626,288.3076923077",
+          "Put OI change: +715,358.7692307692",
+          "Put OI change > Call OI change \u2014 net supportive",
+          "PCR: 0.840",
+          "ATM IV: 9.18%"
+        ],
+        "is_primary": false
+      },
+      "Participation": {
+        "score": 1,
+        "label": "Strong Participation",
+        "reason": "2 bullish vs 0 bearish",
+        "evidence": [
+          "A/D ratio: 2.12",
+          "Strong A/D ratio",
+          "Sectors up: 9/12, down: 3/12",
+          "Broad sector participation"
+        ],
+        "is_primary": true
+      }
+    },
+    "reasons": [
+      "Raw score +2",
+      "\u2013 Momentum: Neutral",
+      "\u2013 Volume: Weak",
+      "\u2013 Futures: Short-covering-type signal",
+      "\u2713 Options: Bullish",
+      "\u2713 Participation: Strong Participation"
+    ]
+  },
+  {
+    "timestamp": "2026-09-23T07:28:26.718096+00:00",
+    "direction": "BULLISH",
+    "state": "BIAS",
+    "raw_score": 3,
+    "conflict": false,
+    "data_quality": "Good",
+    "components": {
+      "Momentum": {
+        "score": 1,
+        "label": "Bullish",
+        "reason": "2 bullish vs 0 bearish",
+        "evidence": [
+          "Price 23,449.00 above VWAP 23,432.70",
+          "RSI 57.0 > 50"
+        ],
+        "is_primary": true
+      },
+      "Volume": {
+        "score": 0,
+        "label": "Weak",
+        "reason": "Move on normal volume",
+        "evidence": [
+          "Relative volume: 0.25x average",
+          "Price moving up with normal/low volume \u2014 weak"
+        ],
+        "is_primary": false
+      },
+      "Futures": {
+        "score": 0,
+        "label": "Short-covering-type signal",
+        "reason": "Price \u2191 + OI \u2193",
+        "evidence": [
+          "Price change: +0.28%",
+          "OI change unavailable",
+          "Interpretation: Short-covering-type signal"
+        ],
+        "is_primary": true
+      },
+      "Options": {
+        "score": 1,
+        "label": "Bullish",
+        "reason": "1 bullish vs 0 bearish",
+        "evidence": [
+          "Call OI change: +538,104.3076923077",
+          "Put OI change: +1,246,031.7692307692",
+          "Put OI change > Call OI change \u2014 net supportive",
+          "PCR: 0.840",
+          "ATM IV: 8.74%"
+        ],
+        "is_primary": false
+      },
+      "Participation": {
+        "score": 1,
+        "label": "Strong Participation",
+        "reason": "2 bullish vs 0 bearish",
+        "evidence": [
+          "A/D ratio: 3.17",
+          "Strong A/D ratio",
+          "Sectors up: 11/12, down: 1/12",
+          "Broad sector participation"
+        ],
+        "is_primary": true
+      }
+    },
+    "reasons": [
+      "Raw score +3",
+      "\u2713 Momentum: Bullish",
+      "\u2013 Volume: Weak",
+      "\u2013 Futures: Short-covering-type signal",
+      "\u2713 Options: Bullish",
+      "\u2713 Participation: Strong Participation"
+    ]
+  },
+  {
+    "timestamp": "2026-09-23T07:31:00.485173+00:00",
+    "direction": "MIXED",
+    "state": "WAIT",
+    "raw_score": 1,
+    "conflict": false,
+    "data_quality": "Good",
+    "components": {
+      "Capital Flows": {
+        "score": 0,
+        "label": "Mixed",
+        "reason": "Balanced flows",
+        "evidence": [
+          "FII 5-day: \u20b9-76,199.8 Cr",
+          "FII 20-day: \u20b9-76,199.8 Cr",
+          "DII 5-day: \u20b9+82,401.4 Cr",
+          "DII 20-day: \u20b9+82,401.4 Cr",
+          "FII flows negative across timeframes",
+          "DII flows positive across timeframes"
+        ],
+        "is_primary": true
+      },
+      "Macro": {
+        "score": 0,
+        "label": "Neutral",
+        "reason": "Macro: Neutral (0 factors assessed)",
+        "evidence": [
+          "Insufficient macro factor data for assessment"
+        ],
+        "is_primary": true
+      },
+      "Earnings": {
+        "score": 0,
+        "label": "Insufficient Data",
+        "reason": "Earnings data unavailable",
+        "evidence": [
+          "Earnings growth data unavailable"
+        ],
+        "is_primary": true
+      },
+      "Participation": {
+        "score": 1,
+        "label": "Improving",
+        "reason": "Participation broadening",
+        "evidence": [
+          "A/D ratio: 3.17",
+          "Breadth positive",
+          "Sectors up: 10/12"
+        ],
+        "is_primary": false
+      },
+      "Derivatives": {
+        "score": 0,
+        "label": "Mixed",
+        "reason": "Derivatives neutral",
+        "evidence": [
+          "PCR: 0.840",
+          "Derivatives positioning mixed",
+          "Futures OI change unavailable"
+        ],
+        "is_primary": false
+      }
+    },
+    "reasons": [
+      "Raw score +1",
+      "\u2013 Capital Flows: Mixed",
+      "\u2013 Macro: Neutral",
+      "\u2013 Earnings: Insufficient Data",
+      "\u2713 Participation: Improving",
+      "\u2013 Derivatives: Mixed"
+    ]
+  },
+  {
+    "timestamp": "2026-09-23T07:32:57.303570+00:00",
+    "direction": "BULLISH",
+    "state": "BIAS",
+    "raw_score": 3,
+    "conflict": false,
+    "data_quality": "Good",
+    "components": {
+      "Momentum": {
+        "score": 1,
+        "label": "Bullish",
+        "reason": "2 bullish vs 0 bearish",
+        "evidence": [
+          "Price 23,455.20 above VWAP 23,433.04",
+          "RSI 64.1 > 50"
+        ],
+        "is_primary": true
+      },
+      "Volume": {
+        "score": 0,
+        "label": "Weak",
+        "reason": "Move on normal volume",
+        "evidence": [
+          "Relative volume: 0.38x average",
+          "Price moving up with normal/low volume \u2014 weak"
+        ],
+        "is_primary": false
+      },
+      "Futures": {
+        "score": 0,
+        "label": "Short-covering-type signal",
+        "reason": "Price \u2191 + OI \u2193",
+        "evidence": [
+          "Price change: +0.30%",
+          "OI change unavailable",
+          "Interpretation: Short-covering-type signal"
+        ],
+        "is_primary": true
+      },
+      "Options": {
+        "score": 1,
+        "label": "Bullish",
+        "reason": "1 bullish vs 0 bearish",
+        "evidence": [
+          "Call OI change: +564,838.3076923077",
+          "Put OI change: +1,236,552.7692307692",
+          "Put OI change > Call OI change \u2014 net supportive",
+          "PCR: 0.840",
+          "ATM IV: 8.50%"
+        ],
+        "is_primary": false
+      },
+      "Participation": {
+        "score": 1,
+        "label": "Strong Participation",
+        "reason": "2 bullish vs 0 bearish",
+        "evidence": [
+          "A/D ratio: 3.17",
+          "Strong A/D ratio",
+          "Sectors up: 10/12, down: 1/12",
+          "Broad sector participation"
+        ],
+        "is_primary": true
+      }
+    },
+    "reasons": [
+      "Raw score +3",
+      "\u2713 Momentum: Bullish",
+      "\u2013 Volume: Weak",
+      "\u2013 Futures: Short-covering-type signal",
+      "\u2713 Options: Bullish",
+      "\u2713 Participation: Strong Participation"
+    ]
+  },
+  {
+    "timestamp": "2026-09-23T07:34:04.106073+00:00",
+    "direction": "MIXED",
+    "state": "WAIT",
+    "raw_score": 1,
+    "conflict": false,
+    "data_quality": "Good",
+    "components": {
+      "Capital Flows": {
+        "score": 0,
+        "label": "Mixed",
+        "reason": "Balanced flows",
+        "evidence": [
+          "FII 5-day: \u20b9-76,199.8 Cr",
+          "FII 20-day: \u20b9-76,199.8 Cr",
+          "DII 5-day: \u20b9+82,401.4 Cr",
+          "DII 20-day: \u20b9+82,401.4 Cr",
+          "FII flows negative across timeframes",
+          "DII flows positive across timeframes"
+        ],
+        "is_primary": true
+      },
+      "Macro": {
+        "score": 0,
+        "label": "Neutral",
+        "reason": "Macro: Neutral (0 factors assessed)",
+        "evidence": [
+          "Insufficient macro factor data for assessment"
+        ],
+        "is_primary": true
+      },
+      "Earnings": {
+        "score": 0,
+        "label": "Insufficient Data",
+        "reason": "Earnings data unavailable",
+        "evidence": [
+          "Earnings growth data unavailable"
+        ],
+        "is_primary": true
+      },
+      "Participation": {
+        "score": 1,
+        "label": "Improving",
+        "reason": "Participation broadening",
+        "evidence": [
+          "A/D ratio: 3.55",
+          "Breadth positive",
+          "Sectors up: 11/12"
+        ],
+        "is_primary": false
+      },
+      "Derivatives": {
+        "score": 0,
+        "label": "Mixed",
+        "reason": "Derivatives neutral",
+        "evidence": [
+          "PCR: 0.840",
+          "Derivatives positioning mixed",
+          "Futures OI change unavailable"
+        ],
+        "is_primary": false
+      }
+    },
+    "reasons": [
+      "Raw score +1",
+      "\u2013 Capital Flows: Mixed",
+      "\u2013 Macro: Neutral",
+      "\u2013 Earnings: Insufficient Data",
+      "\u2713 Participation: Improving",
+      "\u2013 Derivatives: Mixed"
+    ]
+  }
+]
