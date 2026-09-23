@@ -101,8 +101,36 @@ def _factor_to_macro_score(factor: str, state: FactorState) -> int:
     return 0
 
 
+def _score_factors(snap: MarketSnapshot) -> ComponentResult:
+    """Aggregate all factor states into a single factor component score."""
+    factor_states = snap.factor_states or {}
+    contributions = {}
+    for factor_name, states in factor_states.items():
+        state_20d = next((s for s in states if s.timeframe == "20d"), None)
+        if not state_20d or state_20d.direction == FactorDirection.INSUFFICIENT_DATA:
+            continue
+        if state_20d.is_reversing:
+            continue
+        if state_20d.nifty_relevance == "POSITIVE":
+            contributions[factor_name] = (
+                +1 if state_20d.direction == FactorDirection.BULLISH else
+                -1 if state_20d.direction == FactorDirection.BEARISH else 0
+            )
+        elif state_20d.nifty_relevance == "NEGATIVE":
+            contributions[factor_name] = (
+                +1 if state_20d.direction == FactorDirection.BEARISH else
+                -1 if state_20d.direction == FactorDirection.BULLISH else 0
+            )
+    scores = [c for c in contributions.values() if c != 0]
+    if not scores:
+        return ComponentResult("Factors", 0, "Neutral", "No strong factor signals", is_primary=False)
+    avg = sum(scores) / len(scores)
+    label = "Bullish" if avg > 0 else "Bearish" if avg < 0 else "Mixed"
+    return ComponentResult("Factors", round(avg), label, f"Factor bias: {label}", is_primary=False)
+
+
 def compute_verdict(snap: MarketSnapshot) -> Verdict:
-    """Compute weekly verdict with factor-driven macro component."""
+    """Compute weekly verdict with factor-driven macro and all-factor component."""
     missing = snap.critical_fields_missing()
     if missing:
         return Verdict(
@@ -122,6 +150,7 @@ def compute_verdict(snap: MarketSnapshot) -> Verdict:
         "Earnings": _score_earnings(snap),
         "Participation": _score_participation(snap),
         "Derivatives": _score_derivatives(snap),
+        "Factors": _score_factors(snap),
     }
 
     raw_score = sum(c.score for c in components.values())

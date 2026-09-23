@@ -27,6 +27,23 @@ from engines.intraday_verdict import (
 )
 
 
+def _score_factors(snap: MarketSnapshot) -> ComponentResult:
+    """Aggregate factor states into a single factor component score."""
+    factor_states = snap.factor_states or {}
+    contributions = _assess_factor_contributions(factor_states)
+    scores = [c for c in contributions.values() if c != 0]
+    if not scores:
+        return ComponentResult("Factors", 0, "Neutral", "No strong factor signals", is_primary=False)
+    avg = sum(scores) / len(scores)
+    if avg > 0:
+        label = "Bullish"
+    elif avg < 0:
+        label = "Bearish"
+    else:
+        label = "Mixed"
+    return ComponentResult("Factors", round(avg), label, f"Factor bias: {label}", is_primary=False)
+
+
 def compute_verdict(snap: MarketSnapshot) -> Verdict:
     """Compute intraday verdict with factor context."""
     missing = snap.critical_fields_missing()
@@ -48,6 +65,7 @@ def compute_verdict(snap: MarketSnapshot) -> Verdict:
         "Futures": _score_futures(snap),
         "Options": _score_options(snap),
         "Participation": _score_participation(snap),
+        "Factors": _score_factors(snap),
     }
 
     raw_score = sum(c.score for c in components.values())
