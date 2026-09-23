@@ -65,6 +65,8 @@ FRESHNESS_WINDOWS = {
     "pcr": 30,
     "iv": 60,
     "greeks": 60,
+    # Related indices
+    "related_indices": 60,
     # Market stats
     "advances_declines": 120,
     "market_depth": 30,

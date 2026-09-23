@@ -102,17 +102,32 @@ def render_production_sidebar(snap: Optional[MarketSnapshot] = None):
                 latest = max(all_last_fetch)
                 st.caption(f"Updated {latest.strftime('%H:%M:%S')}")
 
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 Refresh", key="sidebar_refresh", use_container_width=True):
+                    cache.clear()
+                    st.rerun()
+            with col2:
+                auto_refresh = st.checkbox("Auto", value=False, key="auto_refresh", help="Auto-refresh every 30s")
+
+            if auto_refresh:
+                import time
+                time.sleep(30)
+                st.rerun()
+
             with st.expander("▸ Source Details", expanded=False):
                 field_sources = registry.get_field_sources_snapshot()
-                for field_name, info in list(field_sources.items())[:15]:
+                for field_name, info in list(field_sources.items())[:20]:
                     provider = info.get("provider", "?")
                     if provider == "AngelBroking":
                         provider = "Angel One"
                     source = info.get("source", "?")
                     status = info.get("status", "?")
                     freshness = info.get("freshness")
-                    freshness_str = f" ({freshness:.0f}s ago)" if freshness else ""
-                    st.caption(f"{field_name}: {provider} ({source}) [{status}]{freshness_str}")
+                    freshness_str = f" ({freshness:.0f}s)" if freshness else ""
+                    fetch_count = info.get("fetch_count", 0)
+                    fetch_str = f" · #{fetch_count}" if fetch_count else ""
+                    st.caption(f"{field_name}: {provider} ({source}) [{status}]{freshness_str}{fetch_str}")
         except Exception as e:
             st.caption(f"Source info unavailable: {e}")
 
