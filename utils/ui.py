@@ -64,6 +64,7 @@ def render_verdict_header(v: Verdict, snap: MarketSnapshot) -> None:
     Layout:
     - Main verdict with color coding
     - Score and trend strength as prominent metrics
+    - Factor bias line (net bullish/bearish factors)
     - Evidence strength line
     - Context line (persistence, regime, expiry)
     - Data quality with tooltip
@@ -99,6 +100,18 @@ def render_verdict_header(v: Verdict, snap: MarketSnapshot) -> None:
         strength_label = trend_strength_label(v.trend_strength)
         strength_str = f"Evidence: {v.trend_strength}/100 ({strength_label})"
     
+    # Build factor bias fragment
+    factor_str = ""
+    if v.factor_contributions:
+        bullish_factors = [f for f, c in v.factor_contributions.items() if c == 1]
+        bearish_factors = [f for f, c in v.factor_contributions.items() if c == -1]
+        parts = []
+        if bullish_factors:
+            parts.append(f"🟢 {len(bullish_factors)} bullish: {', '.join(bullish_factors)}")
+        if bearish_factors:
+            parts.append(f"🔴 {len(bearish_factors)} bearish: {', '.join(bearish_factors)}")
+        factor_str = " | ".join(parts)
+    
     # Data quality with tooltip
     quality_explanation = data_quality_tooltip(snap)
     quality_tooltip = f"Data Quality: {v.data_quality} ⓘ<br><small>{quality_explanation}</small>"
@@ -113,6 +126,8 @@ def render_verdict_header(v: Verdict, snap: MarketSnapshot) -> None:
         <span style="font-size:0.95em;color:#333">{strength_str}</span>
         <br>
         <span style="font-size:0.85em;color:#555">{ctx_str}</span>
+        <br>
+        <span style="font-size:0.85em;color:#333">{factor_str}</span>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
@@ -251,10 +266,17 @@ def verdict_panel(v: Verdict):
     if v.trend_strength > 0:
         strength_label = trend_strength_label(v.trend_strength)
         strength_str = f" | Strength: {v.trend_strength}/100 ({strength_label})"
+    
+    factor_summary = ""
+    if v.factor_contributions:
+        bullish = sum(1 for c in v.factor_contributions.values() if c == 1)
+        bearish = sum(1 for c in v.factor_contributions.values() if c == -1)
+        factor_summary = f" | Factors: {bullish}🟢 {bearish}🔴"
+    
     html = (
         f"<div style='padding:1rem;border-radius:8px;background:{bg};border-left:5px solid {color}'>"
         f"<span style='font-size:1.1em;font-weight:bold'>{v.emoji} {v.display_label}</span><br>"
-        f"<span style='font-size:0.85em;color:#666'>Score: {v.raw_score:+d} | Quality: {v.data_quality}{conflict_str}{persistence_str}{expiry_str}{regime_str}{strength_str}</span>"
+        f"<span style='font-size:0.85em;color:#666'>Score: {v.raw_score:+d} | Quality: {v.data_quality}{conflict_str}{persistence_str}{expiry_str}{regime_str}{strength_str}{factor_summary}</span>"
         f"</div>"
     )
     st.markdown(html, unsafe_allow_html=True)
@@ -319,6 +341,32 @@ def _render_verdict_explanation(v: Verdict) -> None:
         shown += 1
         if shown >= 6:
             break
+
+    # Factor intelligence
+    if v.factor_contributions or v.timeframe_conflicts or v.factor_evidence:
+        st.markdown("**Factor Intelligence:**")
+        
+        if v.factor_contributions:
+            bullish = [(f, c) for f, c in v.factor_contributions.items() if c == 1]
+            bearish = [(f, c) for f, c in v.factor_contributions.items() if c == -1]
+            neutral = [(f, c) for f, c in v.factor_contributions.items() if c == 0]
+            
+            if bullish:
+                st.success(f"Bullish factors ({len(bullish)}): {', '.join(f for f, _ in bullish)}")
+            if bearish:
+                st.error(f"Bearish factors ({len(bearish)}): {', '.join(f for f, _ in bearish)}")
+            if neutral:
+                st.caption(f"Neutral/insufficient ({len(neutral)}): {', '.join(f for f, _ in neutral)}")
+        
+        if v.timeframe_conflicts:
+            st.warning("**Factor Conflicts:**")
+            for conflict in v.timeframe_conflicts[:3]:
+                st.markdown(f"- ⚠️ {conflict}")
+        
+        if v.factor_evidence:
+            st.caption("Factor evidence:")
+            for evidence in v.factor_evidence[:5]:
+                st.caption(f"- {evidence}")
 
     # Expiry context
     if v.expiry_context:
