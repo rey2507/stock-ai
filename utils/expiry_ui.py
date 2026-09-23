@@ -106,7 +106,7 @@ def render_expiry_dashboard(snap: MarketSnapshot) -> None:
     st.markdown("---")
     st.subheader("📉 Expected Move vs Theta Analysis")
     try:
-        _render_expected_move_analysis(chain_snap, atm_strike)
+        _render_expected_move_analysis(snap, chain_snap, atm_strike)
     except Exception as e:
         st.caption(f"Expected move analysis unavailable: {e}")
 
@@ -114,19 +114,18 @@ def render_expiry_dashboard(snap: MarketSnapshot) -> None:
     st.markdown("---")
     st.subheader("✅ Option Suitability Ranking")
     try:
-        _render_suitability_ranking(chain_snap, atm_strike)
+        _render_suitability_ranking(snap, chain_snap, atm_strike)
     except Exception as e:
         st.caption(f"Suitability analysis unavailable: {e}")
 
 
-def _render_expected_move_analysis(chain_snap: MarketSnapshot, atm_strike: Optional[float]) -> None:
+def _render_expected_move_analysis(snap: MarketSnapshot, chain_snap: MarketSnapshot, atm_strike: Optional[float]) -> None:
     """Render expected move analysis for option contracts."""
     from providers.expected_move_analyzer import ExpectedMoveAnalyzer
     from providers.theta_decay_calculator import ThetaDecayCalculator
     from utils.expected_move_display import render_expected_move_analysis, render_expected_move_comparison_table
 
-    greeks_snap = chain_snap
-    greeks_by_strike = getattr(greeks_snap, "greeks_by_strike", None)
+    greeks_by_strike = getattr(snap, "greeks_by_strike", None)
     if not greeks_by_strike:
         st.caption("Greeks data not available. Ensure GreeksProvider is registered and data is fresh.")
         return
@@ -183,13 +182,13 @@ def _render_expected_move_analysis(chain_snap: MarketSnapshot, atm_strike: Optio
         render_expected_move_comparison_table(all_analyses)
 
 
-def _render_suitability_ranking(chain_snap: MarketSnapshot, atm_strike: Optional[float]) -> None:
+def _render_suitability_ranking(snap: MarketSnapshot, chain_snap: MarketSnapshot, atm_strike: Optional[float]) -> None:
     """Render option suitability ranking."""
     from providers.suitability_calculator import SuitabilityCalculator
     from providers.contract_ranker import ContractRanker
     from utils.suitability_display import render_suitability_ranking, render_suitability_score
 
-    greeks_by_strike = getattr(chain_snap, "greeks_by_strike", None)
+    greeks_by_strike = getattr(snap, "greeks_by_strike", None)
     if not greeks_by_strike:
         st.caption("Greeks data not available. Ensure GreeksProvider is registered and data is fresh.")
         return
@@ -201,7 +200,7 @@ def _render_suitability_ranking(chain_snap: MarketSnapshot, atm_strike: Optional
         for expiry_date, results in expiries.items():
             for result in results:
                 try:
-                    expected_move = chain_snap.expected_move_analysis.get(strike, {}).get(expiry_date, [None])[0] if hasattr(chain_snap, "expected_move_analysis") and chain_snap.expected_move_analysis else None
+                    expected_move = snap.expected_move_analysis.get(strike, {}).get(expiry_date, [None])[0] if hasattr(snap, "expected_move_analysis") and snap.expected_move_analysis else None
                     if expected_move is None:
                         from providers.expected_move_analyzer import ExpectedMoveAnalyzer
                         ema = ExpectedMoveAnalyzer(config={})

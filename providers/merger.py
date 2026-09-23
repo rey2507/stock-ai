@@ -68,6 +68,7 @@ def merge_snapshots(*snapshots: MarketSnapshot) -> MarketSnapshot:
 
     Iterates over all FieldMeta fields in the dataclass and picks
     the first available value from the snapshots (in order).
+    Also merges non-FieldMeta attributes like factor_states, greeks_by_strike, etc.
     """
     if not snapshots:
         return MarketSnapshot(data_status="UNAVAILABLE", missing_fields=["ALL"])
@@ -95,6 +96,9 @@ def merge_snapshots(*snapshots: MarketSnapshot) -> MarketSnapshot:
             best = _pick(best, f)
         setattr(merged, fname, best)
 
+    # Merge non-FieldMeta attributes
+    _merge_non_field_attrs(merged, snapshots)
+
     # Determine merged data status
     available = sum(
         1 for f in field_names
@@ -116,3 +120,24 @@ def merge_snapshots(*snapshots: MarketSnapshot) -> MarketSnapshot:
     ]
 
     return merged
+
+
+def _merge_non_field_attrs(merged: MarketSnapshot, snapshots: list[MarketSnapshot]) -> None:
+    """Merge non-FieldMeta attributes from snapshots.
+
+    Priority: first non-None value wins.
+    """
+    _NON_FIELD_ATTRS = [
+        "factor_states",
+        "greeks_by_strike",
+        "expected_move_analysis",
+        "theta_decay_schedules",
+        "suitability_scores",
+    ]
+
+    for attr in _NON_FIELD_ATTRS:
+        for snap in snapshots:
+            val = getattr(snap, attr, None)
+            if val is not None:
+                setattr(merged, attr, val)
+                break
