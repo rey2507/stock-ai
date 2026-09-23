@@ -733,9 +733,40 @@ if page == "Intraday":
 elif page == "Expiry":
     render_expiry_dashboard(snap)
 elif page == "Factor Monitor":
-    factor_snap = snap.factor_states if snap and hasattr(snap, "factor_states") and snap.factor_states else None
-    if not factor_snap:
-        factor_snap = get_latest_factor_snapshot()
+    from providers.registry import get_provider
+    from models.factor_state import FactorSnapshot
+
+    factor_snap = None
+
+    if snap and hasattr(snap, "factor_states") and snap.factor_states:
+        try:
+            from datetime import datetime
+            factor_snap = FactorSnapshot(
+                timestamp=snap.snapshot_timestamp or datetime.now(),
+                factors=snap.factor_states,
+            )
+        except Exception:
+            factor_snap = None
+
+    if factor_snap is None:
+        try:
+            provider = get_provider("FactorDirection")
+            provider_snap = provider.fetch()
+            if provider_snap and provider_snap.factor_states:
+                from datetime import datetime
+                factor_snap = FactorSnapshot(
+                    timestamp=provider_snap.snapshot_timestamp or datetime.now(),
+                    factors=provider_snap.factor_states,
+                )
+        except Exception:
+            factor_snap = None
+
+    if factor_snap is None:
+        try:
+            factor_snap = get_latest_factor_snapshot()
+        except Exception:
+            factor_snap = None
+
     render_factor_monitor(factor_snap)
 else:
     _render_weekly(snap)
