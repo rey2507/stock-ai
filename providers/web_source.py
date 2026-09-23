@@ -28,6 +28,9 @@ YF_CRUDE_WTI = "CL=F"
 YF_CRUDE_BRENT = "BZ=F"
 YF_USDINR = "USDINR=X"
 YF_US10Y = "^TNX"
+YF_SENSEX = "^BSESN"
+YF_BANKNIFTY = "^NSEBANK"
+YF_GIFTNIFTY = "^NSEI"
 
 # NSE session config
 NSE_HEADERS = {
@@ -111,6 +114,9 @@ class WebSourceProvider(BaseProvider):
                 "crude_brent": YF_CRUDE_BRENT,
                 "usdinr": YF_USDINR,
                 "us10y": YF_US10Y,
+                "sensex": YF_SENSEX,
+                "banknifty": YF_BANKNIFTY,
+                "giftnifty": YF_GIFTNIFTY,
             }
             for key, symbol in tickers.items():
                 try:
@@ -340,7 +346,25 @@ class WebSourceProvider(BaseProvider):
             us10y = yahoo.get("us10y", {}).get("current") if yahoo.get("us10y") else None
             us10y_source = "YahooFinance" if us10y else None
 
-            data_status = "LIVE" if any([vix_val, crude_val, usdinr, us10y, nse_ad, nse_oc]) else "UNAVAILABLE"
+            # Related indices
+            sensex = yahoo.get("sensex", {}).get("current") if yahoo.get("sensex") else None
+            sensex_prev = yahoo.get("sensex", {}).get("previous") if yahoo.get("sensex") else None
+            banknifty = yahoo.get("banknifty", {}).get("current") if yahoo.get("banknifty") else None
+            banknifty_prev = yahoo.get("banknifty", {}).get("previous") if yahoo.get("banknifty") else None
+            giftnifty = yahoo.get("giftnifty", {}).get("current") if yahoo.get("giftnifty") else None
+            giftnifty_prev = yahoo.get("giftnifty", {}).get("previous") if yahoo.get("giftnifty") else None
+
+            sensex_change_pct = None
+            if sensex and sensex_prev and sensex_prev != 0:
+                sensex_change_pct = round((sensex - sensex_prev) / sensex_prev * 100, 2)
+            banknifty_change_pct = None
+            if banknifty and banknifty_prev and banknifty_prev != 0:
+                banknifty_change_pct = round((banknifty - banknifty_prev) / banknifty_prev * 100, 2)
+            giftnifty_change_pct = None
+            if giftnifty and giftnifty_prev and giftnifty_prev != 0:
+                giftnifty_change_pct = round((giftnifty - giftnifty_prev) / giftnifty_prev * 100, 2)
+
+            data_status = "LIVE" if any([vix_val, crude_val, usdinr, us10y, nse_ad, nse_oc, sensex, banknifty, giftnifty]) else "UNAVAILABLE"
 
             return MarketSnapshot(
                 snapshot_timestamp=self._ts(),
@@ -364,7 +388,14 @@ class WebSourceProvider(BaseProvider):
                 put_oi=self._field(nse_oc["atm_pe_oi"], source="NSE") if nse_oc else self._unavailable_field(),
                 pcr=self._field(nse_oc["pcr_oi"], source="NSE") if nse_oc and nse_oc.get("pcr_oi") else self._unavailable_field(),
                 atm_iv=self._field(nse_oc["atm_iv"], source="NSE") if nse_oc and nse_oc.get("atm_iv") else self._unavailable_field(),
-                max_pain=self._field(nse_oc["max_pain"], source="NSE") if nse_oc and nse_oc.get("max_pain") else self._unavailable_field(),
+                max_pain=self._field(nse_oc["max_pain"], source="NSE") if nse_oc else self._unavailable_field(),
+                # Related indices
+                sensex_spot=self._field(sensex, source="YahooFinance") if sensex is not None else self._unavailable_field(),
+                sensex_change_pct=self._field(sensex_change_pct, source="YahooFinance") if sensex_change_pct is not None else self._unavailable_field(),
+                banknifty_spot=self._field(banknifty, source="YahooFinance") if banknifty is not None else self._unavailable_field(),
+                banknifty_change_pct=self._field(banknifty_change_pct, source="YahooFinance") if banknifty_change_pct is not None else self._unavailable_field(),
+                giftnifty_spot=self._field(giftnifty, source="YahooFinance") if giftnifty is not None else self._unavailable_field(),
+                giftnifty_change_pct=self._field(giftnifty_change_pct, source="YahooFinance") if giftnifty_change_pct is not None else self._unavailable_field(),
                 # Fields this provider does NOT fill
                 nifty_spot=self._unavailable_field(),
                 nifty_change=self._unavailable_field(),

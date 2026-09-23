@@ -211,6 +211,14 @@ class MarketSnapshot:
     dii_flow_20d: FieldMeta = field(default_factory=FieldMeta)
     dii_flow_month: FieldMeta = field(default_factory=FieldMeta)
 
+    # --- Related Indices ---
+    sensex_spot: FieldMeta = field(default_factory=FieldMeta)
+    sensex_change_pct: FieldMeta = field(default_factory=FieldMeta)
+    banknifty_spot: FieldMeta = field(default_factory=FieldMeta)
+    banknifty_change_pct: FieldMeta = field(default_factory=FieldMeta)
+    giftnifty_spot: FieldMeta = field(default_factory=FieldMeta)
+    giftnifty_change_pct: FieldMeta = field(default_factory=FieldMeta)
+
     # --- Macro ---
     crude_price: FieldMeta = field(default_factory=FieldMeta)
     usd_inr: FieldMeta = field(default_factory=FieldMeta)

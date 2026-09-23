@@ -101,6 +101,61 @@ def _factor_to_macro_score(factor: str, state: FactorState) -> int:
     return 0
 
 
+def _score_related_indices(snap: MarketSnapshot) -> ComponentResult:
+    """Score based on Sensex, Bank Nifty, and GIFT Nifty trends."""
+    nifty_direction = None
+    if snap.is_field_available("nifty_change_pct"):
+        nifty_change = snap.nifty_change_pct.value
+        if nifty_change is not None:
+            nifty_direction = "up" if nifty_change > 0 else ("down" if nifty_change < 0 else "flat")
+
+    related_signals = []
+    evidence = []
+
+    for field_name, label in [
+        ("sensex_change_pct", "Sensex"),
+        ("banknifty_change_pct", "Bank Nifty"),
+        ("giftnifty_change_pct", "GIFT Nifty"),
+    ]:
+        if not snap.is_field_available(field_name):
+            continue
+        change = getattr(snap, field_name).value
+        if change is None:
+            continue
+        direction = "up" if change > 0 else ("down" if change < 0 else "flat")
+        related_signals.append(direction)
+        evidence.append(f"{label}: {change:+.2f}%")
+
+    if not related_signals:
+        return ComponentResult("Related Indices", 0, "Insufficient Data", "No related index data", is_primary=False)
+
+    if nifty_direction:
+        confirming = sum(1 for s in related_signals if s == nifty_direction)
+        if confirming == len(related_signals):
+            score = 1
+            label = "All confirming"
+        elif confirming > 0:
+            score = 0
+            label = "Mixed confirmation"
+        else:
+            score = -1
+            label = "All diverging"
+    else:
+        ups = sum(1 for s in related_signals if s == "up")
+        downs = sum(1 for s in related_signals if s == "down")
+        if ups > downs:
+            score = 1
+            label = "Broadly up"
+        elif downs > ups:
+            score = -1
+            label = "Broadly down"
+        else:
+            score = 0
+            label = "Mixed"
+
+    return ComponentResult("Related Indices", score, label, "; ".join(evidence), evidence=evidence, is_primary=False)
+
+
 def _score_factors(snap: MarketSnapshot) -> ComponentResult:
     """Aggregate all factor states into a single factor component score."""
     factor_states = snap.factor_states or {}
@@ -150,6 +205,7 @@ def compute_verdict(snap: MarketSnapshot) -> Verdict:
         "Earnings": _score_earnings(snap),
         "Participation": _score_participation(snap),
         "Derivatives": _score_derivatives(snap),
+        "Related Indices": _score_related_indices(snap),
         "Factors": _score_factors(snap),
     }
 

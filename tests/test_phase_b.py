@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from datetime import datetime, timezone
 from models.verdict import Verdict, ComponentResult
 from models.factor_state import FactorState, FactorDirection
+from models.snapshot import FieldMeta
 from engines.intraday_verdict_v2 import compute_verdict as intraday_verdict_v2
 from engines.weekly_verdict_v2 import compute_verdict as weekly_verdict_v2
 from tests.fixtures import fixture_strong_bullish_intraday
@@ -248,3 +249,47 @@ class TestFactorContributionLogic:
     def test_reversing_factor(self):
         states = {"crude": [FactorState(factor_name="crude", timeframe="5d", direction=FactorDirection.BULLISH, nifty_relevance="POSITIVE", is_reversing=True)]}
         assert self._compute_contributions(states)["crude"] == 0
+
+
+# =============================================================================
+# E. RELATED INDICES
+# =============================================================================
+
+class TestRelatedIndices:
+    """Test related indices influence on verdict."""
+
+    def test_related_indices_confirming_bullish_nifty(self):
+        """All related indices up with bullish NIFTY → +1."""
+        snap = fixture_strong_bullish_intraday()
+        snap.sensex_change_pct = FieldMeta(value=1.2, status="LIVE", quality="GOOD")
+        snap.banknifty_change_pct = FieldMeta(value=0.8, status="LIVE", quality="GOOD")
+        snap.giftnifty_change_pct = FieldMeta(value=0.5, status="LIVE", quality="GOOD")
+        v = intraday_verdict_v2(snap)
+        comp = v.components.get("Related Indices")
+        assert comp is not None
+        assert comp.score == 1
+        assert comp.label == "All confirming"
+
+    def test_related_indices_diverging_from_bullish_nifty(self):
+        """All related indices down with bullish NIFTY → -1."""
+        snap = fixture_strong_bullish_intraday()
+        snap.sensex_change_pct = FieldMeta(value=-1.2, status="LIVE", quality="GOOD")
+        snap.banknifty_change_pct = FieldMeta(value=-0.8, status="LIVE", quality="GOOD")
+        snap.giftnifty_change_pct = FieldMeta(value=-0.5, status="LIVE", quality="GOOD")
+        v = intraday_verdict_v2(snap)
+        comp = v.components.get("Related Indices")
+        assert comp is not None
+        assert comp.score == -1
+        assert comp.label == "All diverging"
+
+    def test_related_indices_mixed(self):
+        """Mixed signals → 0."""
+        snap = fixture_strong_bullish_intraday()
+        snap.sensex_change_pct = FieldMeta(value=0.5, status="LIVE", quality="GOOD")
+        snap.banknifty_change_pct = FieldMeta(value=-0.3, status="LIVE", quality="GOOD")
+        snap.giftnifty_change_pct = FieldMeta(value=0.1, status="LIVE", quality="GOOD")
+        v = intraday_verdict_v2(snap)
+        comp = v.components.get("Related Indices")
+        assert comp is not None
+        assert comp.score == 0
+        assert comp.label == "Mixed confirmation"

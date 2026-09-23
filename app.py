@@ -283,6 +283,19 @@ def _render_intraday(snap: MarketSnapshot):
         display, status, _ = _field_display_value(snap.india_vix)
         colored_metric("India VIX", display, "gray", status)
 
+    # Related indices
+    st.subheader("Related Indices")
+    rc1, rc2, rc3 = st.columns(3)
+    with rc1:
+        display, status, color = _field_display_value(snap.sensex_change_pct)
+        colored_metric("Sensex", display, color, status)
+    with rc2:
+        display, status, color = _field_display_value(snap.banknifty_change_pct)
+        colored_metric("Bank Nifty", display, color, status)
+    with rc3:
+        display, status, color = _field_display_value(snap.giftnifty_change_pct)
+        colored_metric("GIFT Nifty", display, color, status)
+
     st.markdown("---")
     
     # ── 1. VERDICT ───────────────────────────────────────────────
@@ -633,6 +646,19 @@ def _render_weekly(snap: MarketSnapshot):
     with c3:
         display, status, color = _field_display_value(snap.nifty_change_pct)
         colored_metric("Nifty Change %", display, color, status)
+
+    # Related indices
+    st.subheader("Related Indices")
+    rc1, rc2, rc3 = st.columns(3)
+    with rc1:
+        display, status, color = _field_display_value(snap.sensex_change_pct)
+        colored_metric("Sensex", display, color, status)
+    with rc2:
+        display, status, color = _field_display_value(snap.banknifty_change_pct)
+        colored_metric("Bank Nifty", display, color, status)
+    with rc3:
+        display, status, color = _field_display_value(snap.giftnifty_change_pct)
+        colored_metric("GIFT Nifty", display, color, status)
     
     # Sector Performance
     sectors = snap.get("sector_performance")

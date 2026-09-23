@@ -368,6 +368,16 @@ def _render_verdict_explanation(v: Verdict) -> None:
             for evidence in v.factor_evidence[:5]:
                 st.caption(f"- {evidence}")
 
+    # Related indices
+    related_component = v.components.get("Related Indices")
+    if related_component and related_component.score != 0:
+        st.markdown("**Related Indices:**")
+        emoji = "🟢" if related_component.score > 0 else "🔴"
+        st.markdown(f"{emoji} **{related_component.label}**: {related_component.reason}")
+        if related_component.evidence:
+            for e in related_component.evidence:
+                st.caption(f"- {e}")
+
     # Expiry context
     if v.expiry_context:
         st.markdown("**Market Context:**")
