@@ -12,7 +12,7 @@ from typing import List, Optional, Tuple
 import requests
 
 from providers.cache import cache
-from providers.history_manager import history_manager
+from providers.history_manager import history_manager, SNAPSHOTS_DIR
 
 log = logging.getLogger(__name__)
 
@@ -60,9 +60,16 @@ def get_historical_factor_values(factor_name: str, days: int = 20) -> List[Tuple
     elif factor_name in ("rbi_rate", "inflation", "gdp", "pmi"):
         values = _get_macro_history(factor_name, days)
 
-    if values:
-        cache.put(cache_key, values, source="FactorHistory", freshness_window=86400)
-    return values
+    # Normalize to naive datetimes to avoid offset-naive/aware comparison errors
+    normalized = []
+    for dt, val in values:
+        if hasattr(dt, "tzinfo") and dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        normalized.append((dt, val))
+
+    if normalized:
+        cache.put(cache_key, normalized, source="FactorHistory", freshness_window=86400)
+    return normalized
 
 
 def _get_yahoo_current(factor_name: str, now: datetime) -> Tuple[Optional[float], str, datetime]:
@@ -93,7 +100,7 @@ def _get_yahoo_history(factor_name: str, days: int) -> List[Tuple[datetime, floa
             return []
         values = []
         for dt, row in hist.iterrows():
-            values.append((dt.to_pydatetime().replace(tzinfo=datetime.now().tzinfo), float(row["Close"])))
+            values.append((dt.to_pydatetime().replace(tzinfo=None), float(row["Close"])))
         return values[-days:]
     except Exception as e:
         log.warning(f"Yahoo history fetch failed for {factor_name}: {e}")
@@ -114,7 +121,7 @@ def _get_flows_history(factor_name: str, days: int) -> List[Tuple[datetime, floa
     values: List[Tuple[datetime, float]] = []
     for i in range(days):
         date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-        filepath = history_manager.SNAPSHOTS_DIR / f"{date}.json"
+        filepath = SNAPSHOTS_DIR / f"{date}.json"
         if not filepath.exists():
             continue
         try:
