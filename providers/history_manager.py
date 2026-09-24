@@ -16,7 +16,7 @@ from pathlib import Path
 
 from models.snapshot import MarketSnapshot, FieldMeta
 from models.verdict import Verdict
-from models.factor_state import FactorSnapshot
+from models.factor_state import FactorSnapshot, FactorState, FactorDirection, Acceleration, Persistence
 
 log = logging.getLogger(__name__)
 

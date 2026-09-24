@@ -319,7 +319,7 @@ def verdict_history_panel(limit: int = 10) -> None:
         return ["color: gray"] * len(row)
 
     styled = df.style.apply(_color_row, axis=1)
-    st.dataframe(styled, use_container_width=True, hide_index=True)
+    st.dataframe(styled, width='stretch', hide_index=True)
 
 
 def what_changed_panel(current_verdict: Optional[Verdict]) -> None:

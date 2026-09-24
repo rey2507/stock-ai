@@ -104,7 +104,7 @@ def render_production_sidebar(snap: Optional[MarketSnapshot] = None):
 
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("🔄 Refresh", key="sidebar_refresh", use_container_width=True):
+                if st.button("🔄 Refresh", key="sidebar_refresh", width='stretch'):
                     cache.clear()
                     st.rerun()
             with col2:

@@ -132,7 +132,7 @@ def render_factor_monitor(factor_snapshot=None) -> None:
             return "color: gray"
 
         styled = df.style.map(color_direction, subset=["Direction", "Trend"]).map(color_quality, subset=["Quality"])
-        st.dataframe(styled, use_container_width=True, hide_index=True)
+        st.dataframe(styled, width='stretch', hide_index=True)
 
     st.markdown("---")
 

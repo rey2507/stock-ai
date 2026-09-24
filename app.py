@@ -253,7 +253,7 @@ def _render_candlestick_chart(snap: MarketSnapshot) -> None:
     fig.update_yaxes(title_text="Price", row=1, col=1)
     fig.update_yaxes(title_text="Volume", row=2, col=1)
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 def _render_flow_group(items: list[tuple[str, FieldMeta, str, str]]) -> None:
@@ -430,7 +430,7 @@ def _render_intraday(snap: MarketSnapshot):
     momentum_rows.append({"Indicator": "Price Above VWAP", "Value": above, "Status": "LIVE" if above != "UNAVAILABLE" else "UNAVAILABLE"})
     if momentum_rows:
         mom_df = pd.DataFrame(momentum_rows)
-        st.dataframe(mom_df, use_container_width=True, hide_index=True, height=200)
+        st.dataframe(mom_df, width='stretch', hide_index=True, height=200)
 
     # Sector Performance
     sectors = snap.get("sector_performance")
@@ -456,7 +456,7 @@ def _render_intraday(snap: MarketSnapshot):
                 ),
                 subset=["Change %"]
             )
-            st.dataframe(styled, use_container_width=True, hide_index=True)
+            st.dataframe(styled, width='stretch', hide_index=True)
     else:
         st.caption("Sector performance unavailable")
 
@@ -611,7 +611,7 @@ def _render_weekly(snap: MarketSnapshot):
                 ),
                 subset=["Change %"]
             )
-            st.dataframe(styled, use_container_width=True, hide_index=True)
+            st.dataframe(styled, width='stretch', hide_index=True)
     else:
         st.caption("Sector performance unavailable")
 

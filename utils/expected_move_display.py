@@ -71,4 +71,4 @@ def render_expected_move_comparison_table(analyses: dict[str, ExpectedMoveAnalys
             }
         )
     df = pd.DataFrame(data)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width='stretch', hide_index=True)

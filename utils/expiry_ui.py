@@ -102,7 +102,7 @@ def render_expiry_dashboard(snap: MarketSnapshot) -> None:
             if rows:
                 import pandas as pd
                 greeks_df = pd.DataFrame(rows)
-                st.dataframe(greeks_df, use_container_width=True, hide_index=True)
+                st.dataframe(greeks_df, width='stretch', hide_index=True)
         else:
             st.caption("Greeks data not available.")
 
@@ -118,7 +118,7 @@ def render_expiry_dashboard(snap: MarketSnapshot) -> None:
     ]
     import pandas as pd
     risk_df = pd.DataFrame(risk_data)
-    st.dataframe(risk_df, use_container_width=True, hide_index=True, height=240)
+    st.dataframe(risk_df, width='stretch', hide_index=True, height=240)
     st.caption("VERDICT: Option structure risky for directional bets due to short theta window + choppy regime. Suitable for volatility/spread traders only.")
 
     st.markdown("---")
@@ -254,7 +254,7 @@ def _render_expected_move_analysis(snap: MarketSnapshot, chain_snap: MarketSnaps
                             for d in decay_schedule
                         ])
                         st.markdown("**Theta Decay Schedule**")
-                        st.dataframe(decay_df, use_container_width=True, hide_index=True, height=300)
+                        st.dataframe(decay_df, width='stretch', hide_index=True, height=300)
 
     if all_analyses:
         st.subheader("📊 Contract Comparison")
@@ -393,7 +393,7 @@ def _render_option_chain_heatmap(snap: MarketSnapshot, atm_strike: Optional[floa
             })
 
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True, height=400)
+        st.dataframe(df, width='stretch', hide_index=True, height=400)
 
         # Legend
         st.caption("◆ = ATM strike | ↑ = OI increasing | ↓ = OI decreasing | → = no change")

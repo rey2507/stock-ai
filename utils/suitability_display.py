@@ -102,7 +102,7 @@ def render_suitability_ranking(scores: List[SuitabilityScore]) -> None:
         lambda val: color_recommendation(val) if val in ("BUY", "ACCEPT", "CAUTION", "AVOID", "DO_NOT_TRADE") else ""
     )
 
-    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    st.dataframe(styled_df, width='stretch', hide_index=True)
 
     rec_counts = ranker.group_by_recommendation(scores)
     col1, col2, col3, col4, col5 = st.columns(5)

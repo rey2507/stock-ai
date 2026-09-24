@@ -581,7 +581,7 @@ def component_table(components: dict):
             "Reason": comp.reason,
         })
     df = pd.DataFrame(rows)
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, width='stretch', hide_index=True)
     st.caption("* = High-priority component (used for conflict detection)")
 
 
@@ -623,7 +623,7 @@ def contribution_panel(verdict: Verdict):
             })
         import pandas as pd
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
 
 
 def render_conclusion_bar(state: str, evidence: str, regime: str, persistence: str, summary: str, risk: str, trend_score: int | None = None) -> None:
@@ -716,4 +716,4 @@ def render_diagnostics(rows: list[dict]) -> None:
         return
     with st.expander("[▶ Data Freshness & Diagnostics]", expanded=False):
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, width='stretch', hide_index=True)
