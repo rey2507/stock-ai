@@ -638,43 +638,42 @@ def render_conclusion_bar(state: str, evidence: str, regime: str, persistence: s
     else:
         badge = "⚪"
 
-    with st.container(border=True):
-        col1, col2 = st.columns([1, 3])
-        with col1:
-            st.markdown(f"### {badge} {state or 'UNKNOWN'}")
-            if trend_score is not None:
-                display_score = trend_score if trend_score > 0 else 0
-                score_color = "green" if display_score >= 70 else ("orange" if display_score >= 40 else "red")
-                st.markdown(f"**Trend Score**")
-                st.markdown(f"<span style='font-size:1.5em; font-weight:bold; color:{score_color}'>{display_score}/100</span>", unsafe_allow_html=True)
-        with col2:
-            meta_items = []
-            if evidence:
-                meta_items.append(("Evidence", evidence))
-            if regime:
-                meta_items.append(("Regime", regime))
-            if persistence:
-                meta_items.append(("Persistence", persistence))
-            if meta_items:
-                meta_cols = st.columns(len(meta_items))
-                for col, (label, value) in zip(meta_cols, meta_items):
-                    with col:
-                        st.caption(label)
-                        st.markdown(f"**{value}**")
-        st.divider()
+    st.markdown(f"### {badge} {state or 'UNKNOWN'}")
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        if trend_score is not None:
+            display_score = trend_score if trend_score > 0 else 0
+            score_color = "green" if display_score >= 70 else ("orange" if display_score >= 40 else "red")
+            st.markdown(f"**Trend Score**")
+            st.markdown(f"<span style='font-size:1.5em; font-weight:bold; color:{score_color}'>{display_score}/100</span>", unsafe_allow_html=True)
+    with col2:
+        meta_items = []
+        if evidence:
+            meta_items.append(("Evidence", evidence))
+        if regime:
+            meta_items.append(("Regime", regime))
+        if persistence:
+            meta_items.append(("Persistence", persistence))
+        if meta_items:
+            meta_cols = st.columns(len(meta_items))
+            for col, (label, value) in zip(meta_cols, meta_items):
+                with col:
+                    st.caption(label)
+                    st.markdown(f"**{value}**")
+    st.divider()
 
-        if summary:
-            summary_items = [s.strip() for s in summary.replace(" – ", "\n").replace(" ✗ ", "\n").replace(" ✓ ", "\n").split("\n") if s.strip()]
-            if summary_items:
-                st.markdown("**Summary:**")
-                for item in summary_items:
-                    st.markdown(f"- {item}")
-        if risk:
-            risk_items = [r.strip() for r in risk.replace(";", "\n").split("\n") if r.strip()]
-            if risk_items:
-                st.markdown("⚠️ **Main Risk:**")
-                for item in risk_items:
-                    st.markdown(f"- {item}")
+    if summary:
+        summary_items = [s.strip() for s in summary.replace(" – ", "\n").replace(" ✗ ", "\n").replace(" ✓ ", "\n").split("\n") if s.strip()]
+        if summary_items:
+            st.markdown("**Summary:**")
+            for item in summary_items:
+                st.markdown(f"- {item}")
+    if risk:
+        risk_items = [r.strip() for r in risk.replace(";", "\n").split("\n") if r.strip()]
+        if risk_items:
+            st.markdown("⚠️ **Main Risk:**")
+            for item in risk_items:
+                st.markdown(f"- {item}")
 
 
 def render_what_changed(changes: list[tuple[str, str, str]]) -> None:
