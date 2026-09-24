@@ -150,6 +150,7 @@ if snap is None:
 @st.fragment(run_every=30)
 def _render_candlestick_chart() -> None:
     """Render interactive candlestick chart with VWAP and ATR."""
+    from utils.data_refresh import get_section_snapshot
     snap = get_section_snapshot(max_age_seconds=30)
     import pandas as pd
     import plotly.graph_objects as go
