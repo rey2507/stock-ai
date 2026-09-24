@@ -340,10 +340,11 @@ class RSSNewsProvider(NewsProvider):
 # ─── Reuters Provider ──────────────────────────────────────────────
 
 class ReutersNewsProvider(NewsProvider):
-    """Reuters news for India market."""
+    """Reuters news for India market. Note: RSS feeds now require auth (401)."""
 
     def __init__(self):
         self._source_name = "Reuters"
+        # Reuters RSS feeds now return 401 - keeping for future if they reopen
         self.rss_urls = [
             "https://www.reuters.com/world/india/rss",
             "https://www.reuters.com/markets/rss",
@@ -356,98 +357,25 @@ class ReutersNewsProvider(NewsProvider):
     def fetch_news(
         self, query: str = "NIFTY India market", limit: int = 20, max_age_hours: int = 24
     ) -> List[NewsItem]:
-        items: List[NewsItem] = []
-        cutoff = _utcnow() - timedelta(hours=max_age_hours)
+        # Reuters RSS feeds require authentication (401 Unauthorized)
+        # Return empty list gracefully - log at debug level only
+        log.debug("Reuters RSS feeds require authentication (401), skipping")
+        return []
 
-        for url in self.rss_urls:
-            try:
-                resp = requests.get(url, timeout=10, headers={"User-Agent": "Mozilla/5.0"})
-                if resp.status_code != 200:
-                    continue
-                items.extend(self._parse_reuters_rss(resp.text, cutoff))
-            except Exception as e:
-                log.warning(f"Reuters RSS fetch failed for {url}: {e}")
 
-        return self.deduplicate(items[:limit])
+# ─── Business Standard Provider ────────────────────────────────────
 
-    def _parse_reuters_rss(self, xml_text: str, cutoff: datetime) -> List[NewsItem]:
-        items: List[NewsItem] = []
+class BusinessStandardNewsProvider(RSSNewsProvider):
+    """Business Standard market news via RSS."""
 
-        try:
-            import feedparser
-            parsed = feedparser.parse(xml_text)
-            for entry in parsed.entries:
-                item = self._parse_entry(entry, cutoff)
-                if item:
-                    items.append(item)
-        except ImportError:
-            import xml.etree.ElementTree as ET
-            try:
-                root = ET.fromstring(xml_text)
-                for item_elem in root.iter("item"):
-                    item = self._parse_item_element(item_elem, cutoff)
-                    if item:
-                        items.append(item)
-            except Exception as e:
-                log.warning(f"Reuters XML parse failed: {e}")
-
-        return items
-
-    def _parse_entry(self, entry, cutoff: datetime) -> Optional[NewsItem]:
-        title = getattr(entry, "title", "") or ""
-        if not title:
-            return None
-
-        link = getattr(entry, "link", "") or ""
-        published = getattr(entry, "published_parsed", None)
-        pub_dt = None
-        if published:
-            try:
-                pub_dt = datetime(*published[:6], tzinfo=timezone.utc)
-            except Exception:
-                pub_dt = None
-
-        if pub_dt and pub_dt < cutoff:
-            return None
-
-        snippet = getattr(entry, "summary", "") or getattr(entry, "description", "") or ""
-
-        # Override source to always be "Reuters" even if RSS feed name differs
-        return self._make_item(
-            title=title,
-            source="Reuters",
-            url=link,
-            published_at=pub_dt,
-            content_snippet=snippet[:300] if snippet else None,
-            raw_data={"title": title, "link": link},
-        )
-
-    def _parse_item_element(self, elem, cutoff: datetime) -> Optional[NewsItem]:
-        title = elem.findtext("title") or ""
-        if not title:
-            return None
-
-        link = elem.findtext("link") or ""
-        pub_text = elem.findtext("pubDate") or ""
-        pub_dt = None
-        if pub_text:
-            try:
-                pub_dt = datetime.strptime(pub_text, "%a, %d %b %Y %H:%M:%S %z")
-            except Exception:
-                pub_dt = None
-
-        if pub_dt and pub_dt < cutoff:
-            return None
-
-        desc = elem.findtext("description") or ""
-
-        return self._make_item(
-            title=title,
-            source="Reuters",
-            url=link,
-            published_at=pub_dt,
-            content_snippet=desc[:300] if desc else None,
-            raw_data={"title": title, "link": link},
+    def __init__(self):
+        super().__init__(
+            rss_urls=[
+                "https://www.business-standard.com/rss/markets-news-106.rss",
+                "https://www.business-standard.com/rss/stock-market-news-108.rss",
+                "https://www.business-standard.com/rss/companies-news-104.rss",
+            ],
+            source_name="Business Standard",
         )
 
 
@@ -584,6 +512,7 @@ def get_default_providers() -> dict[str, NewsProvider]:
     """Get default news provider instances."""
     return {
         "reuters": ReutersNewsProvider(),
+        "business_standard": BusinessStandardNewsProvider(),
         "moneycontrol": MoneycontrolNewsProvider(),
         "et": EconomicTimesNewsProvider(),
         "mint": MintNewsProvider(),

@@ -693,7 +693,9 @@ if page == "Intraday":
     _render_intraday(snap)
 elif page == "Expiry":
     _render_expiry_dashboard_fragment()
+    _render_news_fragment()
 elif page == "Factor Monitor":
     render_factor_monitor()
+    _render_news_fragment()
 else:
     _render_weekly(snap)
