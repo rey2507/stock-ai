@@ -48,62 +48,61 @@ try:
 except Exception:
     pass
 
-# --- Fetch live data with fallback chains ---
-def _fetch_provider(name: str):
-    try:
-        provider = get_provider(name)
-        snap = provider.fetch()
-        if snap and snap.data_status != "UNAVAILABLE":
-            provider_manager.record_success(name)
-            return (name, snap)
-        provider_manager.record_failure(name)
-    except Exception:
-        provider_manager.record_failure(name)
-    return (name, None)
+# --- Background live fetch fragment (no full-page rerun) ---
+@st.fragment(run_every=10)
+def _live_fetch() -> None:
+    def _fetch_provider(name: str):
+        try:
+            provider = get_provider(name)
+            snap = provider.fetch()
+            if snap and snap.data_status != "UNAVAILABLE":
+                provider_manager.record_success(name)
+                return (name, snap)
+            provider_manager.record_failure(name)
+        except Exception:
+            provider_manager.record_failure(name)
+        return (name, None)
 
-snapshots = []
-for domain in ["market_data", "options", "futures", "macro", "capital_flows", "sector", "greeks", "factors"]:
-    snap, source = provider_manager.fetch_with_fallback(domain)
-    if snap is not None:
-        snapshots.append(snap)
+    snapshots = []
+    for domain in ["market_data", "options", "futures", "macro", "capital_flows", "sector", "greeks", "factors"]:
+        snap, source = provider_manager.fetch_with_fallback(domain)
+        if snap is not None:
+            snapshots.append(snap)
 
-# Fallback: try any remaining providers not covered by domain chains
-tried = set()
-for snap in snapshots:
-    if hasattr(snap, 'source'):
-        tried.add(snap.source)
-remaining = [p for p in list_providers() if p not in tried]
-for name in remaining:
-    _, snap = _fetch_provider(name)
-    if snap is not None:
-        snapshots.append(snap)
+    tried = set()
+    for snap in snapshots:
+        if hasattr(snap, 'source'):
+            tried.add(snap.source)
+    remaining = [p for p in list_providers() if p not in tried]
+    for name in remaining:
+        _, snap = _fetch_provider(name)
+        if snap is not None:
+            snapshots.append(snap)
 
-if snapshots:
-    merged = snapshots[0]
-    for additional in snapshots[1:]:
-        merged = merge_snapshots(merged, additional)
-    snap = merged
-    provider_manager._last_snapshot = snap
-    provider_manager._last_snapshot_ts = datetime.now(timezone.utc)
-else:
+    if snapshots:
+        merged = snapshots[0]
+        for additional in snapshots[1:]:
+            merged = merge_snapshots(merged, additional)
+        st.session_state["merged_snapshot"] = merged
+        provider_manager._last_snapshot = merged
+        provider_manager._last_snapshot_ts = datetime.now(timezone.utc)
+    else:
+        st.session_state["merged_snapshot"] = MarketSnapshot(source="NONE", data_status="UNAVAILABLE", missing_fields=["ALL"])
+
+_live_fetch()
+
+# --- Sidebar Navigation ---
+page = render_production_sidebar()
+
+# --- Stable app shell that reads from session_state ---
+snap = st.session_state.get("merged_snapshot")
+if snap is None:
     snap = MarketSnapshot(source="NONE", data_status="UNAVAILABLE", missing_fields=["ALL"])
 
-# Persist snapshot in session state to survive sidebar interactions
-_cache = st.session_state.setdefault("snapshot_cache", {})
-_cache.setdefault("merged_snapshot", snap)
-_cache.setdefault("snapshot_ts", datetime.now(timezone.utc))
-_age = (datetime.now(timezone.utc) - _cache["snapshot_ts"]).total_seconds()
-if _age > 30:
-    _cache["merged_snapshot"] = snap
-    _cache["snapshot_ts"] = datetime.now(timezone.utc)
-snap = _cache["merged_snapshot"]
-
-
-# ─── Intraday View ─────────────────────────────────────────────
-
 @st.fragment(run_every=30)
-def _render_candlestick_chart(snap: MarketSnapshot) -> None:
+def _render_candlestick_chart() -> None:
     """Render interactive candlestick chart with VWAP and ATR."""
+    snap = get_section_snapshot(max_age_seconds=30)
     import pandas as pd
     import plotly.graph_objects as go
     from plotly.subplots import make_subplots
@@ -114,8 +113,6 @@ def _render_candlestick_chart(snap: MarketSnapshot) -> None:
     candles = None
     try:
         angel = get_provider("AngelProvider")
-        # Access the internal cache for candles
-        # Candles are cached with key like "candles_99926000_FIVE_MINUTE_5d"
         for key in list(cache._store.keys()):
             if key.startswith("candles_") and "FIVE_MINUTE" in key and "5d" in key:
                 entry = cache.get(key)
@@ -129,8 +126,6 @@ def _render_candlestick_chart(snap: MarketSnapshot) -> None:
         st.caption("Insufficient candle data for chart. Need at least 2 candles.")
         return
 
-    # Parse candles into DataFrame
-    import pandas as pd
     df_data = []
     for c in candles:
         try:
@@ -164,13 +159,11 @@ def _render_candlestick_chart(snap: MarketSnapshot) -> None:
         st.caption("Insufficient valid candle data for chart.")
         return
 
-    # Compute VWAP
     df["tp"] = (df["high"] + df["low"] + df["close"]) / 3.0
     df["cum_tp_vol"] = (df["tp"] * df["volume"]).cumsum()
     df["cum_vol"] = df["volume"].cumsum()
     df["vwap"] = df["cum_tp_vol"] / df["cum_vol"].replace(0, float("nan"))
 
-    # Compute ATR (14-period)
     df["prev_close"] = df["close"].shift(1)
     df["tr"] = df.apply(
         lambda row: max(
@@ -182,7 +175,6 @@ def _render_candlestick_chart(snap: MarketSnapshot) -> None:
     )
     df["atr"] = df["tr"].rolling(window=14, min_periods=1).mean()
 
-    # Create subplots: price + volume
     fig = make_subplots(
         rows=2, cols=1,
         shared_xaxes=True,
@@ -191,7 +183,6 @@ def _render_candlestick_chart(snap: MarketSnapshot) -> None:
         subplot_titles=("NIFTY Price", "Volume"),
     )
 
-    # Candlestick
     fig.add_trace(
         go.Candlestick(
             x=df["timestamp"],
@@ -206,7 +197,6 @@ def _render_candlestick_chart(snap: MarketSnapshot) -> None:
         row=1, col=1,
     )
 
-    # VWAP line
     fig.add_trace(
         go.Scatter(
             x=df["timestamp"],
@@ -217,7 +207,6 @@ def _render_candlestick_chart(snap: MarketSnapshot) -> None:
         row=1, col=1,
     )
 
-    # ATR bands (upper/lower)
     latest_close = df["close"].iloc[-1]
     latest_atr = df["atr"].iloc[-1] if pd.notna(df["atr"].iloc[-1]) else 0
     if latest_atr > 0:
@@ -242,7 +231,6 @@ def _render_candlestick_chart(snap: MarketSnapshot) -> None:
             row=1, col=1,
         )
 
-    # Volume bars
     colors = [
         "#26a69a" if df["close"].iloc[i] >= df["open"].iloc[i] else "#ef5350"
         for i in range(len(df))
@@ -258,7 +246,6 @@ def _render_candlestick_chart(snap: MarketSnapshot) -> None:
         row=2, col=1,
     )
 
-    # Layout
     fig.update_layout(
         height=500,
         xaxis_rangeslider_visible=False,
@@ -287,14 +274,14 @@ def _render_flow_group(items: list[tuple[str, FieldMeta, str, str]]) -> None:
 
 
 @st.fragment(run_every=15)
-def _render_related_indices_fragment(snap: MarketSnapshot) -> None:
+def _render_related_indices_fragment() -> None:
     from utils.data_refresh import get_section_snapshot
     snap = get_section_snapshot(max_age_seconds=15)
     render_related_indices_section(snap)
 
 
 @st.fragment(run_every=30)
-def _render_expiry_dashboard_fragment(snap: MarketSnapshot) -> None:
+def _render_expiry_dashboard_fragment() -> None:
     from utils.data_refresh import get_section_snapshot
     snap = get_section_snapshot(max_age_seconds=30)
     render_expiry_dashboard(snap)
@@ -403,7 +390,7 @@ def _render_intraday(snap: MarketSnapshot):
     # Price Action
     st.subheader("Price Action")
     try:
-        _render_candlestick_chart(snap)
+        _render_candlestick_chart()
     except Exception as e:
         st.caption(f"Chart unavailable: {e}")
 
@@ -602,7 +589,7 @@ def _render_weekly(snap: MarketSnapshot):
     # ── 3. SUPPORTING DATA ───────────────────────────────────────
 
     # Related indices
-    _render_related_indices_fragment(snap)
+    _render_related_indices_fragment()
 
     # Sector Performance
     sectors = snap.get("sector_performance")
@@ -654,12 +641,12 @@ def _render_weekly(snap: MarketSnapshot):
 
 # ─── Sidebar + Route ───────────────────────────────────────────
 
-page = render_production_sidebar(snap)
+page = render_production_sidebar()
 
 if page == "Intraday":
     _render_intraday(snap)
 elif page == "Expiry":
-    _render_expiry_dashboard_fragment(snap)
+    _render_expiry_dashboard_fragment()
 elif page == "Factor Monitor":
     render_factor_monitor()
 else:

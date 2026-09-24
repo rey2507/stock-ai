@@ -1,4 +1,9 @@
-"""Lightweight data refresh helper for live fragments."""
+"""Lightweight data refresh helper for live fragments.
+
+Provides cached, TTL-gated snapshots using the existing provider registry,
+merger, and ProviderManager fallback chains. Fragments call this directly
+to obtain fresh data without requiring a full-page rerun.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +13,7 @@ from typing import Optional
 from providers.registry import list_providers, get_provider
 from providers.merger import merge_snapshots
 from models.snapshot import MarketSnapshot
+from utils.provider_manager import provider_manager
 
 
 def get_section_snapshot(max_age_seconds: int = 30) -> MarketSnapshot:
@@ -30,19 +36,15 @@ def get_section_snapshot(max_age_seconds: int = 30) -> MarketSnapshot:
             return cached_snap
 
     try:
-        results = []
-        for name in list_providers():
-            try:
-                provider = get_provider(name)
-                snap = provider.fetch()
-                if snap and snap.data_status != "UNAVAILABLE":
-                    results.append(snap)
-            except Exception:
-                continue
+        snapshots = []
+        for domain in ["market_data", "options", "futures", "macro", "capital_flows", "sector", "greeks", "factors"]:
+            snap, _ = provider_manager.fetch_with_fallback(domain)
+            if snap is not None:
+                snapshots.append(snap)
 
-        if results:
-            merged = results[0]
-            for additional in results[1:]:
+        if snapshots:
+            merged = snapshots[0]
+            for additional in snapshots[1:]:
                 merged = merge_snapshots(merged, additional)
             session[cache_key] = merged
             session[cache_ts_key] = now
@@ -85,3 +87,4 @@ def get_section_snapshot(max_age_seconds: int = 30) -> MarketSnapshot:
         data_status="UNAVAILABLE",
         missing_fields=["ALL"],
     )
+

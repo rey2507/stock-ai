@@ -33,26 +33,27 @@ def _direction_emoji(direction: FactorDirection) -> str:
 
 
 @st.fragment(run_every=10)
-def render_factor_monitor(factor_snapshot=None) -> None:
-    """Render the full Factor Monitor page with table-first layout."""
-    if factor_snapshot is None:
+def render_factor_monitor(snap=None) -> None:
+    """Render the Factor Monitor page using a fresh snapshot from session cache."""
+    if snap is None:
         try:
-            factor_snapshot = get_latest_factor_snapshot()
+            from utils.data_refresh import get_section_snapshot
+            snap = get_section_snapshot(max_age_seconds=10)
         except Exception:
-            factor_snapshot = None
+            snap = None
 
-    if not factor_snapshot or not factor_snapshot.factors:
+    factors = getattr(snap, 'factor_states', None)
+    if not factors:
         st.warning("Factor data unavailable.")
         return
 
     st.header("Factor Monitor")
-    st.caption(f"**Last updated:** {factor_snapshot.timestamp.strftime('%H:%M:%S IST') if factor_snapshot.timestamp else 'N/A'}")
+    st.caption(f"**Last updated:** {snap.snapshot_timestamp.strftime('%H:%M:%S IST') if snap.snapshot_timestamp else 'N/A'}")
 
     timeframe = st.radio("Timeframe", ["intraday", "5d", "20d"], horizontal=True, label_visibility="collapsed")
 
-    # Collect states for selected timeframe
     states = []
-    for factor_name, state_list in factor_snapshot.factors.items():
+    for factor_name, state_list in factors.items():
         state = next((s for s in state_list if s.timeframe == timeframe), None)
         if state:
             states.append(state)
@@ -61,7 +62,6 @@ def render_factor_monitor(factor_snapshot=None) -> None:
         st.caption("No factor data for selected timeframe.")
         return
 
-    # ── 1. FACTOR CHANGES SUMMARY ───────────────────────────────
     accelerating = [s for s in states if s.acceleration == Acceleration.ACCELERATING]
     steady = [s for s in states if s.acceleration == Acceleration.STEADY]
     decelerating = [s for s in states if s.acceleration == Acceleration.DECELERATING]
@@ -83,7 +83,6 @@ def render_factor_monitor(factor_snapshot=None) -> None:
             st.markdown(part)
         st.markdown("---")
 
-    # ── 2. FACTOR DETAIL ──────────────────────────────────────────
     st.markdown("### Factor Detail")
     if states:
         dir_emoji = {
@@ -123,7 +122,6 @@ def render_factor_monitor(factor_snapshot=None) -> None:
 
     st.markdown("---")
 
-    # ── 3. FACTOR GROUPING BY STATE ─────────────────────────────
     st.markdown("### Factor Grouping")
     group_bullets = []
     if accelerating:
@@ -143,7 +141,6 @@ def render_factor_monitor(factor_snapshot=None) -> None:
 
     st.markdown("---")
 
-    # ── 4. FACTOR DIVERGENCE MATRIX ─────────────────────────────
     divergences = [s for s in states if s.nifty_relevance in ("NEGATIVE", "UNCLEAR") or s.is_reversing]
     if divergences:
         st.markdown("### Factor Divergence")
@@ -153,7 +150,6 @@ def render_factor_monitor(factor_snapshot=None) -> None:
 
     st.markdown("---")
 
-    # ── 5. DIAGNOSTICS ──────────────────────────────────────────
     diag_rows = []
     for state in states:
         diag_rows.append({
