@@ -33,8 +33,14 @@ def _direction_emoji(direction: FactorDirection) -> str:
 
 
 @st.fragment(run_every=10)
-def render_factor_monitor(factor_snapshot) -> None:
+def render_factor_monitor(factor_snapshot=None) -> None:
     """Render the full Factor Monitor page with table-first layout."""
+    if factor_snapshot is None:
+        try:
+            factor_snapshot = get_latest_factor_snapshot()
+        except Exception:
+            factor_snapshot = None
+
     if not factor_snapshot or not factor_snapshot.factors:
         st.warning("Factor data unavailable.")
         return

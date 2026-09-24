@@ -269,13 +269,17 @@ def _render_flow_group(items: list[tuple[str, FieldMeta, str, str]]) -> None:
             colored_metric(label, f"{prefix}{display} {suffix}", color, status)
 
 
-@st.fragment(run_every=30)
+@st.fragment(run_every=15)
 def _render_related_indices_fragment(snap: MarketSnapshot) -> None:
+    from utils.data_refresh import get_section_snapshot
+    snap = get_section_snapshot(max_age_seconds=15)
     render_related_indices_section(snap)
 
 
 @st.fragment(run_every=30)
 def _render_expiry_dashboard_fragment(snap: MarketSnapshot) -> None:
+    from utils.data_refresh import get_section_snapshot
+    snap = get_section_snapshot(max_age_seconds=30)
     render_expiry_dashboard(snap)
 
 
@@ -640,40 +644,6 @@ if page == "Intraday":
 elif page == "Expiry":
     _render_expiry_dashboard_fragment(snap)
 elif page == "Factor Monitor":
-    from providers.registry import get_provider
-    from models.factor_state import FactorSnapshot
-
-    factor_snap = None
-
-    if snap and hasattr(snap, "factor_states") and snap.factor_states:
-        try:
-            from datetime import datetime
-            factor_snap = FactorSnapshot(
-                timestamp=snap.snapshot_timestamp or datetime.now(),
-                factors=snap.factor_states,
-            )
-        except Exception:
-            factor_snap = None
-
-    if factor_snap is None:
-        try:
-            provider = get_provider("FactorDirection")
-            provider_snap = provider.fetch()
-            if provider_snap and provider_snap.factor_states:
-                from datetime import datetime
-                factor_snap = FactorSnapshot(
-                    timestamp=provider_snap.snapshot_timestamp or datetime.now(),
-                    factors=provider_snap.factor_states,
-                )
-        except Exception:
-            factor_snap = None
-
-    if factor_snap is None:
-        try:
-            factor_snap = get_latest_factor_snapshot()
-        except Exception:
-            factor_snap = None
-
-    render_factor_monitor(factor_snap)
+    render_factor_monitor()
 else:
     _render_weekly(snap)
