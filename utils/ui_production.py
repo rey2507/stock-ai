@@ -18,6 +18,7 @@ from providers.source_registry import registry
 from providers.cache import cache
 from providers.ws_health import ws_monitor, StreamState
 from providers.conflict_detector import conflict_detector
+from utils.provider_manager import provider_manager
 
 
 def render_production_sidebar(snap: Optional[MarketSnapshot] = None):
@@ -128,6 +129,11 @@ def render_production_sidebar(snap: Optional[MarketSnapshot] = None):
                     fetch_count = info.get("fetch_count", 0)
                     fetch_str = f" · #{fetch_count}" if fetch_count else ""
                     st.caption(f"{field_name}: {provider} ({source}) [{status}]{freshness_str}{fetch_str}")
+
+            # --- Provider Fallback Controls ---
+            st.markdown("---")
+            st.markdown("**PROVIDER**")
+            provider_manager.render_provider_controls(current_domain="market_data")
         except Exception as e:
             st.caption(f"Source info unavailable: {e}")
 

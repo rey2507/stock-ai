@@ -19,6 +19,7 @@ from providers.merger import merge_snapshots
 from providers.streaming import get_streaming_manager
 from utils.market_hours import market
 from utils.ui_production import render_production_sidebar
+from utils.provider_manager import provider_manager
 from utils.ui import data_source_banner, verdict_panel, component_table, evidence_detail, contribution_panel, _field_display_value, colored_metric, render_verdict_header, data_quality_tooltip, render_related_indices_section, render_conclusion_bar, render_what_changed, render_evidence_group, render_diagnostics
 from utils.history_ui import verdict_history_panel, what_changed_panel, compute_persistence, compute_expiry_context, compute_market_regime, compute_trend_strength
 from utils.expiry_ui import render_expiry_dashboard
@@ -47,27 +48,43 @@ try:
 except Exception:
     pass
 
-# --- Fetch live data from all providers ---
+# --- Fetch live data with fallback chains ---
 def _fetch_provider(name: str):
     try:
         provider = get_provider(name)
         snap = provider.fetch()
         if snap and snap.data_status != "UNAVAILABLE":
+            provider_manager.record_success(name)
             return (name, snap)
+        provider_manager.record_failure(name)
     except Exception:
-        pass
+        provider_manager.record_failure(name)
     return (name, None)
 
-with ThreadPoolExecutor(max_workers=8) as executor:
-    results = list(executor.map(_fetch_provider, list_providers()))
+snapshots = []
+for domain in ["market_data", "options", "futures", "macro", "capital_flows", "sector", "greeks", "factors"]:
+    snap, source = provider_manager.fetch_with_fallback(domain)
+    if snap is not None:
+        snapshots.append(snap)
 
-snapshots = [snap for name, snap in results if snap is not None]
+# Fallback: try any remaining providers not covered by domain chains
+tried = set()
+for snap in snapshots:
+    if hasattr(snap, 'source'):
+        tried.add(snap.source)
+remaining = [p for p in list_providers() if p not in tried]
+for name in remaining:
+    _, snap = _fetch_provider(name)
+    if snap is not None:
+        snapshots.append(snap)
 
 if snapshots:
     merged = snapshots[0]
     for additional in snapshots[1:]:
         merged = merge_snapshots(merged, additional)
     snap = merged
+    provider_manager._last_snapshot = snap
+    provider_manager._last_snapshot_ts = datetime.now(timezone.utc)
 else:
     snap = MarketSnapshot(source="NONE", data_status="UNAVAILABLE", missing_fields=["ALL"])
 

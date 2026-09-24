@@ -118,3 +118,25 @@ HISTORY_QUALITY_THRESHOLDS = {
 # --- Greeks / Black-Scholes ---
 RISK_FREE_RATE = 0.065
 DIVIDEND_YIELD = 0.0
+
+# --- Provider Fallback Chain ---
+# Order matters: first available healthy provider wins for each domain.
+PROVIDER_FALLBACK_CHAIN = {
+    "market_data": ["AngelProvider", "WebSource"],
+    "options": ["NSEOptions", "AngelProvider", "WebSource"],
+    "futures": ["AngelProvider", "WebSource"],
+    "macro": ["Macro", "WebSource"],
+    "capital_flows": ["CapitalFlows", "WebSource"],
+    "sector": ["Sector", "WebSource"],
+    "greeks": ["Greeks", "AngelProvider"],
+    "factors": ["FactorDirection", "WebSource"],
+}
+
+# Default primary provider for UI selection
+DEFAULT_PRIMARY_PROVIDER = "AngelProvider"
+
+# Auto-fallback after consecutive failures
+AUTO_FALLBACK_AFTER_FAILURES = 3
+
+# Cooldown before retrying failed provider (seconds)
+FAILED_PROVIDER_COOLDOWN_SECONDS = 300
