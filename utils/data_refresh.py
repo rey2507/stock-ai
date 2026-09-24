@@ -16,6 +16,17 @@ from models.snapshot import MarketSnapshot
 from utils.provider_manager import provider_manager
 
 
+def _get_session_state() -> dict:
+    """Safely get streamlit session state, falling back to empty dict."""
+    try:
+        import streamlit as st
+        if hasattr(st, 'session_state'):
+            return st.session_state
+    except Exception:
+        pass
+    return {}
+
+
 def get_section_snapshot(max_age_seconds: int = 30) -> MarketSnapshot:
     """Return a fresh merged snapshot, reusing provider caches when possible.
 
@@ -26,8 +37,8 @@ def get_section_snapshot(max_age_seconds: int = 30) -> MarketSnapshot:
     cache_ts_key = "section_snap_ts"
     now = datetime.now(timezone.utc)
 
-    session = __import__("streamlit").runtime.scriptrunner.get_script_run_ctx().session_state
-    cached_snap: Optional[MarketSnapshot] = session.get(cache_key)
+    session = _get_session_state()
+    cached_snap = session.get(cache_key)
     cached_ts = session.get(cache_ts_key)
 
     if cached_snap is not None and cached_ts is not None:
@@ -87,4 +98,3 @@ def get_section_snapshot(max_age_seconds: int = 30) -> MarketSnapshot:
         data_status="UNAVAILABLE",
         missing_fields=["ALL"],
     )
-
