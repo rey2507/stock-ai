@@ -49,33 +49,24 @@ try:
 except Exception:
     pass
 
-# --- News Providers Initialization ---
-_news_providers = []
+# --- News Providers Initialization (Phase 1A) ---
+_news_providers = None
+_news_aggregator = None
 try:
-    from providers.news_provider import NewsProvider, NewsAPIProvider, RSSNewsProvider, FinnhubNewsProvider
-    from config import NEWS_ENABLED, NEWS_PROVIDERS, NEWS_QUERY
-    import os
+    from providers.news_provider import get_default_providers
+    from providers.news_aggregator import NewsAggregator
+    from config import NEWS_ENABLED, NEWS_QUERY, NEWS_MAX_AGE_HOURS, NEWS_MAX_HEADLINES
 
     if NEWS_ENABLED:
-        for pcfg in NEWS_PROVIDERS:
-            ptype = pcfg.get("type")
-            try:
-                if ptype == "newsapi":
-                    api_key = os.getenv("NEWSAPI_API_KEY") or pcfg.get("api_key")
-                    if api_key:
-                        _news_providers.append(NewsAPIProvider(api_key=api_key))
-                elif ptype == "rss":
-                    urls = pcfg.get("urls", [])
-                    if urls:
-                        _news_providers.append(RSSNewsProvider(rss_urls=urls))
-                elif ptype == "finnhub":
-                    api_key = os.getenv("FINNHUB_API_KEY") or pcfg.get("api_key")
-                    if api_key:
-                        _news_providers.append(FinnhubNewsProvider(api_key=api_key))
-            except Exception as e:
-                log.warning(f"Failed to init news provider {ptype}: {e}")
+        _news_providers = get_default_providers()
+        _news_aggregator = NewsAggregator(
+            providers=_news_providers,
+            max_age_hours=NEWS_MAX_AGE_HOURS,
+            limit_per_provider=NEWS_MAX_HEADLINES,
+        )
 except Exception:
-    _news_providers = []
+    _news_providers = None
+    _news_aggregator = None
 
 # --- Background live fetch fragment (no full-page rerun) ---
 @st.fragment(run_every=10)
@@ -119,12 +110,10 @@ def _live_fetch() -> None:
         st.session_state["merged_snapshot"] = MarketSnapshot(source="NONE", data_status="UNAVAILABLE", missing_fields=["ALL"])
 
     # --- News fetch (non-blocking) ---
-    if _news_providers:
+    if _news_aggregator:
         try:
-            from providers.news_aggregator import fetch_news_snapshot
-            from config import NEWS_MAX_AGE_HOURS, NEWS_MAX_HEADLINES
-            news_snap = fetch_news_snapshot(_news_providers, max_age_hours=NEWS_MAX_AGE_HOURS)
-            items = news_snap.items[:NEWS_MAX_HEADLINES] if news_snap.items else []
+            from config import NEWS_QUERY, NEWS_MAX_AGE_HOURS, NEWS_MAX_HEADLINES
+            news_snap = _news_aggregator.fetch_and_aggregate(query=NEWS_QUERY, limit=NEWS_MAX_HEADLINES)
             st.session_state["news_snapshot"] = news_snap
         except Exception as e:
             log.warning(f"News fetch failed: {e}")

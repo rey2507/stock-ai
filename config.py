@@ -141,17 +141,10 @@ AUTO_FALLBACK_AFTER_FAILURES = 3
 # Cooldown before retrying failed provider (seconds)
 FAILED_PROVIDER_COOLDOWN_SECONDS = 300
 
-# --- News Intelligence ---
+# --- News Intelligence (Phase 1A) ---
 NEWS_ENABLED = True
 NEWS_CACHE_TTL_SECONDS = 900
 NEWS_MAX_HEADLINES = 15
 NEWS_MAX_AGE_HOURS = 24
 NEWS_REFRESH_INTERVAL_SECONDS = 60
-NEWS_PROVIDERS: list[dict] = [
-    {"type": "rss", "urls": [
-        "https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms",
-        "https://www.moneycontrol.com/rss/marketnews.xml",
-        "https://www.business-standard.com/rss/markets-news-106.rss",
-    ]},
-]
 NEWS_QUERY = "NIFTY India market"
