@@ -60,6 +60,7 @@ def render_production_sidebar(snap: Optional[MarketSnapshot] = None):
             index=0,
             horizontal=False,
             label_visibility="collapsed",
+            key="sidebar_nav_radio",
         )
 
         st.markdown("---")
