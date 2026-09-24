@@ -107,14 +107,9 @@ def render_production_sidebar(snap: Optional[MarketSnapshot] = None):
             with col1:
                 if st.button("🔄 Refresh", key="sidebar_refresh", width='stretch'):
                     cache.clear()
-                    st.rerun()
+                    st.session_state["force_refresh"] = True
             with col2:
-                auto_refresh = st.checkbox("Auto", value=False, key="auto_refresh", help="Auto-refresh every 30s")
-
-            if auto_refresh:
-                import time
-                time.sleep(30)
-                st.rerun()
+                st.caption("Auto: live fragments (10s)")
 
             with st.expander("▸ Source Details", expanded=False):
                 field_sources = registry.get_field_sources_snapshot()
