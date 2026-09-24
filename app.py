@@ -24,8 +24,9 @@ from utils.ui import data_source_banner, verdict_panel, component_table, evidenc
 from utils.history_ui import verdict_history_panel, what_changed_panel, compute_persistence, compute_expiry_context, compute_market_regime, compute_trend_strength
 from utils.expiry_ui import render_expiry_dashboard
 from utils.factor_card import render_factor_monitor, get_latest_factor_snapshot
-from models.factor_state import FactorDirection
+from models.news_model import NewsItem
 from providers.history_manager import history_manager
+from ui.news import render_news_section
 
 load_dotenv()
 
@@ -47,6 +48,34 @@ try:
         _stream_mgr.start()
 except Exception:
     pass
+
+# --- News Providers Initialization ---
+_news_providers = []
+try:
+    from providers.news_provider import NewsProvider, NewsAPIProvider, RSSNewsProvider, FinnhubNewsProvider
+    from config import NEWS_ENABLED, NEWS_PROVIDERS, NEWS_QUERY
+    import os
+
+    if NEWS_ENABLED:
+        for pcfg in NEWS_PROVIDERS:
+            ptype = pcfg.get("type")
+            try:
+                if ptype == "newsapi":
+                    api_key = os.getenv("NEWSAPI_API_KEY") or pcfg.get("api_key")
+                    if api_key:
+                        _news_providers.append(NewsAPIProvider(api_key=api_key))
+                elif ptype == "rss":
+                    urls = pcfg.get("urls", [])
+                    if urls:
+                        _news_providers.append(RSSNewsProvider(rss_urls=urls))
+                elif ptype == "finnhub":
+                    api_key = os.getenv("FINNHUB_API_KEY") or pcfg.get("api_key")
+                    if api_key:
+                        _news_providers.append(FinnhubNewsProvider(api_key=api_key))
+            except Exception as e:
+                log.warning(f"Failed to init news provider {ptype}: {e}")
+except Exception:
+    _news_providers = []
 
 # --- Background live fetch fragment (no full-page rerun) ---
 @st.fragment(run_every=10)
@@ -89,7 +118,26 @@ def _live_fetch() -> None:
     else:
         st.session_state["merged_snapshot"] = MarketSnapshot(source="NONE", data_status="UNAVAILABLE", missing_fields=["ALL"])
 
+    # --- News fetch (non-blocking) ---
+    if _news_providers:
+        try:
+            from providers.news_aggregator import fetch_news_snapshot
+            from config import NEWS_MAX_AGE_HOURS, NEWS_MAX_HEADLINES
+            news_snap = fetch_news_snapshot(_news_providers, max_age_hours=NEWS_MAX_AGE_HOURS)
+            items = news_snap.items[:NEWS_MAX_HEADLINES] if news_snap.items else []
+            st.session_state["news_snapshot"] = news_snap
+        except Exception as e:
+            log.warning(f"News fetch failed: {e}")
+            st.session_state["news_snapshot"] = None
+
 _live_fetch()
+
+# --- News render fragment ---
+@st.fragment(run_every=60)
+def _render_news_fragment() -> None:
+    news_snap = st.session_state.get("news_snapshot")
+    if news_snap and news_snap.items:
+        render_news_section(news_snap)
 
 # --- Sidebar Navigation ---
 page = render_production_sidebar()
@@ -466,6 +514,11 @@ def _render_intraday(snap: MarketSnapshot):
 
     st.markdown("---")
 
+    # News
+    _render_news_fragment()
+
+    st.markdown("---")
+
     # ── 4. HISTORY & DIAGNOSTICS ────────────────────────────────
     with st.expander("Verdict History", expanded=False):
         verdict_history_panel(limit=10)
@@ -618,6 +671,11 @@ def _render_weekly(snap: MarketSnapshot):
             st.dataframe(styled, width='stretch', hide_index=True)
     else:
         st.caption("Sector performance unavailable")
+
+    st.markdown("---")
+
+    # News
+    _render_news_fragment()
 
     st.markdown("---")
 
