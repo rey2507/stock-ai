@@ -5,10 +5,9 @@ No mock mode exposed to user. No separate pages/ directory.
 """
 
 import streamlit as st
-import pandas as pd
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 import logging
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 
 log = logging.getLogger(__name__)
@@ -20,7 +19,7 @@ from providers.merger import merge_snapshots
 from providers.streaming import get_streaming_manager
 from utils.market_hours import market
 from utils.ui_production import render_production_sidebar
-from utils.ui import data_source_banner, verdict_panel, component_table, evidence_detail, contribution_panel, _field_display_value, colored_metric, render_verdict_header, data_quality_tooltip, render_related_indices_section
+from utils.ui import data_source_banner, verdict_panel, component_table, evidence_detail, contribution_panel, _field_display_value, colored_metric, render_verdict_header, data_quality_tooltip, render_related_indices_section, render_conclusion_bar, render_what_changed, render_evidence_group, render_diagnostics
 from utils.history_ui import verdict_history_panel, what_changed_panel, compute_persistence, compute_expiry_context, compute_market_regime, compute_trend_strength
 from utils.expiry_ui import render_expiry_dashboard
 from utils.factor_card import render_factor_monitor, get_latest_factor_snapshot
@@ -49,15 +48,20 @@ except Exception:
     pass
 
 # --- Fetch live data from all providers ---
-snapshots = []
-for name in list_providers():
+def _fetch_provider(name: str):
     try:
         provider = get_provider(name)
         snap = provider.fetch()
         if snap and snap.data_status != "UNAVAILABLE":
-            snapshots.append(snap)
+            return (name, snap)
     except Exception:
         pass
+    return (name, None)
+
+with ThreadPoolExecutor(max_workers=8) as executor:
+    results = list(executor.map(_fetch_provider, list_providers()))
+
+snapshots = [snap for name, snap in results if snap is not None]
 
 if snapshots:
     merged = snapshots[0]
@@ -67,11 +71,25 @@ if snapshots:
 else:
     snap = MarketSnapshot(source="NONE", data_status="UNAVAILABLE", missing_fields=["ALL"])
 
+# Persist snapshot in session state to survive sidebar interactions
+_cache = st.session_state.setdefault("snapshot_cache", {})
+_cache.setdefault("merged_snapshot", snap)
+_cache.setdefault("snapshot_ts", datetime.now(timezone.utc))
+_age = (datetime.now(timezone.utc) - _cache["snapshot_ts"]).total_seconds()
+if _age > 30:
+    _cache["merged_snapshot"] = snap
+    _cache["snapshot_ts"] = datetime.now(timezone.utc)
+snap = _cache["merged_snapshot"]
+
 
 # ─── Intraday View ─────────────────────────────────────────────
 
+@st.fragment(run_every=30)
 def _render_candlestick_chart(snap: MarketSnapshot) -> None:
     """Render interactive candlestick chart with VWAP and ATR."""
+    import pandas as pd
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
     from providers.registry import get_provider
     from providers.cache import cache
 
@@ -251,8 +269,19 @@ def _render_flow_group(items: list[tuple[str, FieldMeta, str, str]]) -> None:
             colored_metric(label, f"{prefix}{display} {suffix}", color, status)
 
 
+@st.fragment(run_every=30)
+def _render_related_indices_fragment(snap: MarketSnapshot) -> None:
+    render_related_indices_section(snap)
+
+
+@st.fragment(run_every=30)
+def _render_expiry_dashboard_fragment(snap: MarketSnapshot) -> None:
+    render_expiry_dashboard(snap)
+
+
 def _render_intraday(snap: MarketSnapshot):
     from engines.intraday_verdict_v2 import compute_verdict
+    import pandas as pd
 
     st.header("Intraday Dashboard")
     data_source_banner(snap)
@@ -261,35 +290,7 @@ def _render_intraday(snap: MarketSnapshot):
         st.error("No live data available.")
         return
 
-    # Market snapshot
-    st.subheader("Market")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        # Prefer live WebSocket tick if available
-        _spot_display, _spot_status, _ = _field_display_value(snap.nifty_spot)
-        if _stream_mgr:
-            _tick = _stream_mgr.latest_tick
-            if _tick and _tick.ltp:
-                _spot_display = f"{_tick.ltp:,.2f}"
-                _spot_status = "LIVE"
-        st.metric("Nifty Spot (LIVE)" if _stream_mgr and _stream_mgr.is_running else "Nifty Spot", _spot_display, _spot_status)
-    with c2:
-        display, status, _ = _field_display_value(snap.futures_price)
-        colored_metric("Nifty Futures", display, "gray", status)
-    with c3:
-        display, status, color = _field_display_value(snap.nifty_change_pct)
-        colored_metric("Nifty Change %", display, color, status)
-    with c4:
-        display, status, _ = _field_display_value(snap.india_vix)
-        colored_metric("India VIX", display, "gray", status)
-
-    # Related indices
-    render_related_indices_section(snap)
-
-    st.markdown("---")
-    
     # ── 1. VERDICT ───────────────────────────────────────────────
-    st.subheader("Dashboard State")
     result = compute_verdict(snap)
 
     # Save snapshot to history
@@ -316,34 +317,75 @@ def _render_intraday(snap: MarketSnapshot):
     # Determine trend strength
     result.trend_strength = compute_trend_strength(result)
 
-    # Primary verdict header
-    render_verdict_header(result, snap)
+    # Conclusion bar
+    render_conclusion_bar(
+        state=result.display_label or result.direction or "UNKNOWN",
+        evidence=result.data_quality or "UNKNOWN",
+        regime=result.market_regime or "UNKNOWN",
+        persistence=result.persistence or "UNKNOWN",
+        summary=" ".join(result.reasons) if result.reasons else "",
+        risk="; ".join(result.timeframe_conflicts) if result.timeframe_conflicts else "",
+    )
 
     # What changed
     what_changed_panel(result)
 
-    # Why this conclusion
-    contribution_panel(result)
-    verdict_panel(result)
+    st.markdown("---")
+
+    # ── 2. WHY (EVIDENCE) ────────────────────────────────────────
+
+    # Price & Structure
+    price_bullets = []
+    _spot_display, _spot_status, _ = _field_display_value(snap.nifty_spot)
+    if _stream_mgr and _stream_mgr.is_running and _stream_mgr.latest_tick and _stream_mgr.latest_tick.ltp:
+        _spot_display = f"{_stream_mgr.latest_tick.ltp:,.2f}"
+    price_bullets.append(f"Spot: {_spot_display}")
+    display, status, _ = _field_display_value(snap.futures_price)
+    price_bullets.append(f"Futures: {display}")
+    display, status, color = _field_display_value(snap.nifty_change_pct)
+    price_bullets.append(f"Nifty Change: {display}")
+    display, status, _ = _field_display_value(snap.india_vix)
+    price_bullets.append(f"India VIX: {display}")
+    render_evidence_group("▼ PRICE & STRUCTURE", price_bullets, expanded=True)
+
+    # Derivatives
+    deriv_bullets = []
+    display, status, _ = _field_display_value(snap.call_oi)
+    deriv_bullets.append(f"Call OI: {display}")
+    display, status, _ = _field_display_value(snap.put_oi)
+    deriv_bullets.append(f"Put OI: {display}")
+    display, status, color = _field_display_value(snap.pcr)
+    deriv_bullets.append(f"PCR: {display}")
+    display, status, _ = _field_display_value(snap.atm_iv)
+    deriv_bullets.append(f"ATM IV: {display}")
+    render_evidence_group("▼ DERIVATIVES", deriv_bullets, expanded=False)
+
+    # Participation
+    part_bullets = []
+    display, status, _ = _field_display_value(snap.advances)
+    part_bullets.append(f"Advances: {display}")
+    display, status, _ = _field_display_value(snap.declines)
+    part_bullets.append(f"Declines: {display}")
+    display, status, color = _field_display_value(snap.advance_decline_ratio)
+    part_bullets.append(f"A/D Ratio: {display}")
+    render_evidence_group("▼ PARTICIPATION", part_bullets, expanded=False)
 
     # Factor context
     if result.factor_evidence:
-        with st.expander("Factor Context", expanded=False):
-            for evidence in result.factor_evidence:
-                st.caption(evidence)
+        render_evidence_group("▼ FACTOR CONTEXT", result.factor_evidence, expanded=False)
 
     st.markdown("---")
-    
-    # ── 2. TECHNICAL / DERIVATIVES ──────────────────────────────
-    
-    # Candlestick chart
+
+    # ── 3. SUPPORTING DATA ───────────────────────────────────────
+
+    # Price Action
     st.subheader("Price Action")
     try:
         _render_candlestick_chart(snap)
     except Exception as e:
         st.caption(f"Chart unavailable: {e}")
-    
-    # Futures + Options
+
+    # Futures + Options summary
     st.subheader("Futures & Options")
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -368,278 +410,23 @@ def _render_intraday(snap: MarketSnapshot):
             rel = "UNAVAILABLE"
         st.metric("Price/OI Relationship", rel)
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        display, status, _ = _field_display_value(snap.call_oi)
-        colored_metric("Call OI", display, "gray", status)
-        chg_display, chg_status, chg_color = _field_display_value(snap.call_oi_change)
-        colored_metric("Call OI Change", chg_display, chg_color, chg_status)
-    with c2:
-        display, status, _ = _field_display_value(snap.put_oi)
-        colored_metric("Put OI", display, "gray", status)
-        chg_display, chg_status, chg_color = _field_display_value(snap.put_oi_change)
-        colored_metric("Put OI Change", chg_display, chg_color, chg_status)
-    with c3:
-        display, status, color = _field_display_value(snap.pcr)
-        colored_metric("PCR", display, color, status)
-    with c4:
-        display, status, _ = _field_display_value(snap.atm_iv)
-        colored_metric("ATM IV", display, "gray", status)
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        display, status, _ = _field_display_value(snap.max_pain)
-        colored_metric("Max Pain", display, "gray", status)
-    with c2:
-        display, status, _ = _field_display_value(snap.total_option_volume)
-        colored_metric("Options Volume", display, "gray", status)
-    
-    # Volume
-    st.subheader("Volume")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        display, status, _ = _field_display_value(snap.nifty_volume)
-        colored_metric("NIFTY Volume (EOD)", display, "gray", status)
-        st.caption("Source: nselib (daily)")
-    with c2:
-        display, status, _ = _field_display_value(snap.total_option_volume)
-        colored_metric("Options Volume (Intraday)", display, "gray", status)
-        st.caption("Source: NSE option chain")
-    with c3:
-        rel_vol = snap.get("relative_volume")
-        if rel_vol is not None:
-            display, status, color = _field_display_value(snap.relative_volume)
-            colored_metric("Relative Volume", display, color, status)
-            st.caption("vs 20-period avg (candles)")
-        else:
-            st.caption("Relative volume: UNAVAILABLE")
-    
-    # Participation
-    st.subheader("Participation")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        display, status, _ = _field_display_value(snap.advances)
-        colored_metric("Advances", display, "gray", status)
-    with c2:
-        display, status, _ = _field_display_value(snap.declines)
-        colored_metric("Declines", display, "gray", status)
-    with c3:
-        display, status, color = _field_display_value(snap.advance_decline_ratio)
-        colored_metric("A/D Ratio", display, color, status)
-    
-    sectors = snap.get("sector_performance")
-    if sectors:
-        st.markdown("**Sector Performance:**")
-        sector_data = sectors.get("sectors", sectors) if isinstance(sectors, dict) else {}
-        rows = []
-        for s, v in sector_data.items():
-            if isinstance(v, dict):
-                pct = v.get("pChange", v.get("percentChange", 0))
-            else:
-                pct = v
-            try:
-                pct_f = float(pct)
-                rows.append({"Sector": s, "Change %": f"{pct_f:+.2f}%"})
-            except (TypeError, ValueError):
-                rows.append({"Sector": s, "Change %": "UNAVAILABLE"})
-        if rows:
-            df = pd.DataFrame(rows)
-            styled = df.style.map(
-                lambda v: "color: gray" if v == "UNAVAILABLE" else (
-                    f"color: {'green' if float(str(v).replace('%','').replace('+','')) > 0 else 'red' if float(str(v).replace('%','').replace('+','')) < 0 else 'gray'}"
-                ),
-                subset=["Change %"]
-            )
-            st.dataframe(styled, use_container_width=True, hide_index=True)
-    else:
-        st.caption("Sector performance unavailable")
-    
-    # Momentum
-    st.subheader("Momentum")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        display, status, _ = _field_display_value(snap.vwap)
-        colored_metric("VWAP", display, "gray", status)
-    with c2:
-        display, status, _ = _field_display_value(snap.rsi)
-        colored_metric("RSI", display, "gray", status)
-    with c3:
-        display, status, _ = _field_display_value(snap.relative_volume)
-        colored_metric("Volume vs Avg", display, "gray", status)
-    with c4:
-        price = snap.get("nifty_spot")
-        vwap = snap.get("vwap")
-        if price is not None and vwap is not None:
-            above = "Yes" if price > vwap else "No"
-        else:
-            above = "UNAVAILABLE"
-        st.metric("Price Above VWAP", above)
-    
-    st.markdown("---")
-    
-    # ── 3. HISTORY & DIAGNOSTICS ────────────────────────────────
-    st.subheader("Verdict History")
-    verdict_history_panel(limit=10)
-    st.markdown("---")
-    
-    with st.expander("Diagnostics", expanded=False):
-        st.caption("Non-sensitive pipeline status")
-        try:
-            from providers.registry import get_provider
-            provider = get_provider("AngelProvider")
-            diag = provider.diagnostics
-            st.markdown(f"**Angel One:** {'🟢 Connected' if diag.get('angel_connected') else '🔴 Error'}")
-            st.markdown(f"**Futures contract:** {'✅ ' + str(diag.get('futures_token')) if diag.get('futures_contract_discovered') else '❌ Not discovered'}")
-            st.markdown(f"**Expiry:** {diag.get('expiry') or '❌ None'}")
-            st.markdown(f"**ATM strike:** {diag.get('atm_strike') or '❌ None'}")
-            st.markdown(f"**Strikes:** {diag.get('strikes_count', 0)} (CE: {diag.get('ce_count', 0)}, PE: {diag.get('pe_count', 0)})")
-        except Exception as e:
-            st.caption(f"Diagnostics unavailable: {e}")
+    # Volume + Momentum as compact tables
+    st.subheader("Momentum & Volume")
+    momentum_rows = []
+    display, status, _ = _field_display_value(snap.vwap)
+    momentum_rows.append({"Indicator": "VWAP", "Value": display, "Status": status})
+    display, status, _ = _field_display_value(snap.rsi)
+    momentum_rows.append({"Indicator": "RSI (14)", "Value": display, "Status": status})
+    display, status, _ = _field_display_value(snap.relative_volume)
+    momentum_rows.append({"Indicator": "Volume vs Avg", "Value": display, "Status": status})
+    price = snap.get("nifty_spot")
+    vwap = snap.get("vwap")
+    above = "Yes" if price is not None and vwap is not None and price > vwap else ("No" if price is not None and vwap is not None else "UNAVAILABLE")
+    momentum_rows.append({"Indicator": "Price Above VWAP", "Value": above, "Status": "LIVE" if above != "UNAVAILABLE" else "UNAVAILABLE"})
+    if momentum_rows:
+        mom_df = pd.DataFrame(momentum_rows)
+        st.dataframe(mom_df, use_container_width=True, hide_index=True, height=200)
 
-
-# ─── Weekly View ───────────────────────────────────────────────
-
-def _render_weekly(snap: MarketSnapshot):
-    from engines.weekly_verdict_v2 import compute_verdict
-
-    st.header("Weekly Dashboard")
-    data_source_banner(snap)
-
-    if snap.data_status == "UNAVAILABLE":
-        st.error("No live data available.")
-        return
-
-    st.markdown("---")
-    
-    # ── 1. VERDICT ───────────────────────────────────────────────
-    st.subheader("Market Verdict")
-    result = compute_verdict(snap)
-
-    # Save verdict to history (only if score changed)
-    try:
-        history_manager.save_verdict(result)
-    except Exception as e:
-        log.warning(f"Failed to save verdict: {e}")
-
-    # Determine persistence from recent verdict history
-    result.persistence = compute_persistence(result)
-
-    # Determine expiry context
-    result.expiry_context = compute_expiry_context(snap)
-
-    # Determine market regime
-    result.market_regime = compute_market_regime(snap)
-
-    # Determine trend strength
-    result.trend_strength = compute_trend_strength(result)
-
-    # Primary verdict header
-    render_verdict_header(result, snap)
-
-    # What changed
-    what_changed_panel(result)
-
-    # Why this conclusion
-    contribution_panel(result)
-    verdict_panel(result)
-
-    # Factor context
-    if result.factor_states:
-        with st.expander("Factor Context", expanded=False):
-            for factor, states in result.factor_states.items():
-                for state in states:
-                    if state.timeframe == "20d" and state.direction != FactorDirection.INSUFFICIENT_DATA:
-                        st.caption(f"{factor} (20d): {state.direction.value} — {state.nifty_interpretation}")
-
-    st.markdown("---")
-    
-    # ── 2. SUPPORTING MARKET DATA ───────────────────────────────
-    
-    # Capital Flows
-    st.subheader("Capital Flows")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("**FII**")
-        _render_flow_group([
-            ("Daily", snap.fii_flow_1d, "₹", "Cr"),
-            ("5-Day", snap.fii_flow_5d, "₹", "Cr"),
-            ("20-Day", snap.fii_flow_20d, "₹", "Cr"),
-            ("Monthly", snap.fii_flow_month, "₹", "Cr"),
-        ])
-    with c2:
-        st.markdown("**DII**")
-        _render_flow_group([
-            ("Daily", snap.dii_flow_1d, "₹", "Cr"),
-            ("5-Day", snap.dii_flow_5d, "₹", "Cr"),
-            ("20-Day", snap.dii_flow_20d, "₹", "Cr"),
-            ("Monthly", snap.dii_flow_month, "₹", "Cr"),
-        ])
-    
-    # Macro + Economy
-    st.subheader("Macro & Economy")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        display, status, _ = _field_display_value(snap.crude_price)
-        colored_metric("Brent Crude", display, "gray", status)
-    with c2:
-        display, status, _ = _field_display_value(snap.usd_inr)
-        colored_metric("USD/INR", display, "gray", status)
-    with c3:
-        display, status, _ = _field_display_value(snap.us10y_yield)
-        colored_metric("US 10Y Yield", display, "gray", status)
-    
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        display, status, _ = _field_display_value(snap.fed_rate)
-        colored_metric("Fed Rate", display, "gray", status)
-    with c2:
-        display, status, _ = _field_display_value(snap.india_policy_rate)
-        colored_metric("India Policy Rate", display, "gray", status)
-    with c3:
-        display, status, _ = _field_display_value(snap.inflation)
-        colored_metric("Inflation (CPI)", display, "gray", status)
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        display, status, _ = _field_display_value(snap.gdp_growth)
-        colored_metric("GDP Growth", display, "gray", status)
-    with c2:
-        display, status, _ = _field_display_value(snap.pmi)
-        colored_metric("PMI", display, "gray", status)
-    
-    display, status, _ = _field_display_value(snap.earnings_growth)
-    colored_metric("Nifty Earnings Growth", display, "gray", status)
-    
-    # Market + Participation
-    st.subheader("Market & Participation")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        display, status, color = _field_display_value(snap.nifty_spot)
-        colored_metric("Nifty Spot", display, color, status)
-    with c2:
-        display, status, _ = _field_display_value(snap.futures_price)
-        colored_metric("Nifty Futures", display, "gray", status)
-    with c3:
-        display, status, color = _field_display_value(snap.advance_decline_ratio)
-        colored_metric("A/D Ratio", display, color, status)
-    with c4:
-        display, status, _ = _field_display_value(snap.india_vix)
-        colored_metric("India VIX", display, "gray", status)
-    
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        display, status, _ = _field_display_value(snap.advances)
-        colored_metric("Advances", display, "gray", status)
-    with c2:
-        display, status, _ = _field_display_value(snap.declines)
-        colored_metric("Declines", display, "gray", status)
-    with c3:
-        display, status, color = _field_display_value(snap.nifty_change_pct)
-        colored_metric("Nifty Change %", display, color, status)
-
-    # Related indices
-    render_related_indices_section(snap)
-    
     # Sector Performance
     sectors = snap.get("sector_performance")
     if sectors:
@@ -667,67 +454,179 @@ def _render_weekly(snap: MarketSnapshot):
             st.dataframe(styled, use_container_width=True, hide_index=True)
     else:
         st.caption("Sector performance unavailable")
-    
+
+    st.markdown("---")
+
+    # ── 4. HISTORY & DIAGNOSTICS ────────────────────────────────
+    with st.expander("Verdict History", expanded=False):
+        verdict_history_panel(limit=10)
+
+    diag_rows = []
+    try:
+        from providers.registry import get_provider
+        provider = get_provider("AngelProvider")
+        diag = provider.diagnostics
+        diag_rows.append({"Source": "Angel One", "Status": "🟢 Connected" if diag.get('angel_connected') else "🔴 Error", "Timestamp": "", "Detail": f"Token {diag.get('futures_token')}" if diag.get('futures_contract_discovered') else "Not discovered"})
+        diag_rows.append({"Source": "Expiry", "Status": "🟢" if diag.get('expiry') else "🔴", "Timestamp": "", "Detail": diag.get('expiry') or "None"})
+        diag_rows.append({"Source": "ATM Strike", "Status": "🟢" if diag.get('atm_strike') else "🔴", "Timestamp": "", "Detail": str(diag.get('atm_strike') or "None")})
+        diag_rows.append({"Source": "Strikes", "Status": "🟢" if diag.get('strikes_count', 0) > 0 else "🔴", "Timestamp": "", "Detail": f"{diag.get('strikes_count', 0)} (CE: {diag.get('ce_count', 0)}, PE: {diag.get('pe_count', 0)})"})
+    except Exception:
+        pass
+    render_diagnostics(diag_rows)
+
+
+# ─── Weekly View ───────────────────────────────────────────────
+
+def _render_weekly(snap: MarketSnapshot):
+    from engines.weekly_verdict_v2 import compute_verdict
+    import pandas as pd
+
+    st.header("Weekly Dashboard")
+    data_source_banner(snap)
+
+    if snap.data_status == "UNAVAILABLE":
+        st.error("No live data available.")
+        return
+
+    # ── 1. VERDICT ───────────────────────────────────────────────
+    result = compute_verdict(snap)
+
+    # Save verdict to history (only if score changed)
+    try:
+        history_manager.save_verdict(result)
+    except Exception as e:
+        log.warning(f"Failed to save verdict: {e}")
+
+    # Determine persistence from recent verdict history
+    result.persistence = compute_persistence(result)
+
+    # Determine expiry context
+    result.expiry_context = compute_expiry_context(snap)
+
+    # Determine market regime
+    result.market_regime = compute_market_regime(snap)
+
+    # Determine trend strength
+    result.trend_strength = compute_trend_strength(result)
+
+    # Conclusion bar
+    render_conclusion_bar(
+        state=result.display_label or result.direction or "UNKNOWN",
+        evidence=result.data_quality or "UNKNOWN",
+        regime=result.market_regime or "UNKNOWN",
+        persistence=result.persistence or "UNKNOWN",
+        summary=" ".join(result.reasons) if result.reasons else "",
+        risk="; ".join(result.timeframe_conflicts) if result.timeframe_conflicts else "",
+    )
+
+    # What changed
+    what_changed_panel(result)
+
+    st.markdown("---")
+
+    # ── 2. WHY (EVIDENCE) ────────────────────────────────────────
+
+    # Market Structure
+    structure_bullets = []
+    display, status, _ = _field_display_value(snap.nifty_spot)
+    structure_bullets.append(f"Nifty Spot: {display}")
+    display, status, _ = _field_display_value(snap.futures_price)
+    structure_bullets.append(f"Futures: {display}")
+    display, status, color = _field_display_value(snap.advance_decline_ratio)
+    structure_bullets.append(f"A/D Ratio: {display}")
+    display, status, _ = _field_display_value(snap.india_vix)
+    structure_bullets.append(f"India VIX: {display}")
+    render_evidence_group("▼ MARKET STRUCTURE", structure_bullets, expanded=True)
+
+    # Capital Flows
+    flow_bullets = []
+    display, status, _ = _field_display_value(snap.fii_flow_1d)
+    flow_bullets.append(f"FII Daily: {display}")
+    display, status, _ = _field_display_value(snap.dii_flow_1d)
+    flow_bullets.append(f"DII Daily: {display}")
+    display, status, _ = _field_display_value(snap.fii_flow_5d)
+    flow_bullets.append(f"FII 5-Day: {display}")
+    render_evidence_group("▼ CAPITAL FLOWS", flow_bullets, expanded=False)
+
+    # Macro & Economy
+    macro_bullets = []
+    display, status, _ = _field_display_value(snap.usd_inr)
+    macro_bullets.append(f"USD/INR: {display}")
+    display, status, _ = _field_display_value(snap.crude_price)
+    macro_bullets.append(f"Brent Crude: {display}")
+    display, status, _ = _field_display_value(snap.us10y_yield)
+    macro_bullets.append(f"US 10Y Yield: {display}")
+    display, status, _ = _field_display_value(snap.inflation)
+    macro_bullets.append(f"Inflation (CPI): {display}")
+    render_evidence_group("▼ MACRO & ECONOMY", macro_bullets, expanded=False)
+
     # Derivatives
-    st.subheader("Derivatives")
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        display, status, color = _field_display_value(snap.pcr)
-        colored_metric("Weekly PCR", display, color, status)
-    with c2:
-        display, status, color = _field_display_value(snap.futures_oi_change)
-        colored_metric("Futures OI Change", display, color, status)
-    with c3:
-        display, status, _ = _field_display_value(snap.atm_iv)
-        colored_metric("ATM IV", display, "gray", status)
-    
-    c1, c2 = st.columns(2)
-    with c1:
-        display, status, _ = _field_display_value(snap.call_oi)
-        colored_metric("Call OI", display, "gray", status)
-        chg_display, chg_status, chg_color = _field_display_value(snap.call_oi_change)
-        colored_metric("Call OI Change", chg_display, chg_color, chg_status)
-    with c2:
-        display, status, _ = _field_display_value(snap.put_oi)
-        colored_metric("Put OI", display, "gray", status)
-        chg_display, chg_status, chg_color = _field_display_value(snap.put_oi_change)
-        colored_metric("Put OI Change", chg_display, chg_color, chg_status)
-    
-    display, status, _ = _field_display_value(snap.max_pain)
-    colored_metric("Max Pain", display, "gray", status)
-    
-    # Volume
-    st.subheader("Volume")
-    c1, c2 = st.columns(2)
-    with c1:
-        display, status, _ = _field_display_value(snap.nifty_volume)
-        colored_metric("NIFTY Volume (EOD)", display, "gray", status)
-        st.caption("Source: nselib (daily)")
-    with c2:
-        display, status, _ = _field_display_value(snap.total_option_volume)
-        colored_metric("Options Volume (Intraday)", display, "gray", status)
-        st.caption("Source: NSE option chain")
-    
+    deriv_bullets = []
+    display, status, color = _field_display_value(snap.pcr)
+    deriv_bullets.append(f"Weekly PCR: {display}")
+    display, status, color = _field_display_value(snap.futures_oi_change)
+    deriv_bullets.append(f"Futures OI Change: {display}")
+    display, status, _ = _field_display_value(snap.atm_iv)
+    deriv_bullets.append(f"ATM IV: {display}")
+    render_evidence_group("▼ DERIVATIVES", deriv_bullets, expanded=False)
+
+    # Factor context
+    if result.factor_evidence:
+        render_evidence_group("▼ FACTOR CONTEXT", result.factor_evidence, expanded=False)
+
     st.markdown("---")
-    
-    # ── 3. HISTORY & DIAGNOSTICS ────────────────────────────────
-    st.subheader("Verdict History")
-    verdict_history_panel(limit=10)
+
+    # ── 3. SUPPORTING DATA ───────────────────────────────────────
+
+    # Related indices
+    _render_related_indices_fragment(snap)
+
+    # Sector Performance
+    sectors = snap.get("sector_performance")
+    if sectors:
+        st.markdown("**Sector Performance:**")
+        sector_data = sectors.get("sectors", sectors) if isinstance(sectors, dict) else {}
+        rows = []
+        for s, v in sector_data.items():
+            if isinstance(v, dict):
+                pct = v.get("pChange", v.get("percentChange", 0))
+            else:
+                pct = v
+            try:
+                pct_f = float(pct)
+                rows.append({"Sector": s, "Change %": f"{pct_f:+.2f}%"})
+            except (TypeError, ValueError):
+                rows.append({"Sector": s, "Change %": "UNAVAILABLE"})
+        if rows:
+            df = pd.DataFrame(rows)
+            styled = df.style.map(
+                lambda v: "color: gray" if v == "UNAVAILABLE" else (
+                    f"color: {'green' if float(str(v).replace('%','').replace('+','')) > 0 else 'red' if float(str(v).replace('%','').replace('+','')) < 0 else 'gray'}"
+                ),
+                subset=["Change %"]
+            )
+            st.dataframe(styled, use_container_width=True, hide_index=True)
+    else:
+        st.caption("Sector performance unavailable")
+
     st.markdown("---")
-    
-    with st.expander("Diagnostics", expanded=False):
-        st.caption("Non-sensitive pipeline status")
-        try:
-            from providers.registry import get_provider
-            provider = get_provider("AngelProvider")
-            diag = provider.diagnostics
-            st.markdown(f"**Angel One:** {'🟢 Connected' if diag.get('angel_connected') else '🔴 Error'}")
-            st.markdown(f"**Futures contract:** {'✅ ' + str(diag.get('futures_token')) if diag.get('futures_contract_discovered') else '❌ Not discovered'}")
-            st.markdown(f"**Expiry:** {diag.get('expiry') or '❌ None'}")
-            st.markdown(f"**ATM strike:** {diag.get('atm_strike') or '❌ None'}")
-            st.markdown(f"**Strikes:** {diag.get('strikes_count', 0)} (CE: {diag.get('ce_count', 0)}, PE: {diag.get('pe_count', 0)})")
-        except Exception as e:
-            st.caption(f"Diagnostics unavailable: {e}")
+
+    # ── 4. HISTORY & DIAGNOSTICS ────────────────────────────────
+    with st.expander("Verdict History", expanded=False):
+        verdict_history_panel(limit=10)
+
+    diag_rows = []
+    try:
+        from providers.registry import get_provider
+        provider = get_provider("AngelProvider")
+        diag = provider.diagnostics
+        diag_rows.append({"Source": "Angel One", "Status": "🟢 Connected" if diag.get('angel_connected') else "🔴 Error", "Timestamp": "", "Detail": f"Token {diag.get('futures_token')}" if diag.get('futures_contract_discovered') else "Not discovered"})
+        diag_rows.append({"Source": "Expiry", "Status": "🟢" if diag.get('expiry') else "🔴", "Timestamp": "", "Detail": diag.get('expiry') or "None"})
+        diag_rows.append({"Source": "ATM Strike", "Status": "🟢" if diag.get('atm_strike') else "🔴", "Timestamp": "", "Detail": str(diag.get('atm_strike') or "None")})
+        diag_rows.append({"Source": "Strikes", "Status": "🟢" if diag.get('strikes_count', 0) > 0 else "🔴", "Timestamp": "", "Detail": f"{diag.get('strikes_count', 0)} (CE: {diag.get('ce_count', 0)}, PE: {diag.get('pe_count', 0)})"})
+    except Exception:
+        pass
+    render_diagnostics(diag_rows)
 
 
 # ─── Sidebar + Route ───────────────────────────────────────────
@@ -737,7 +636,7 @@ page = render_production_sidebar(snap)
 if page == "Intraday":
     _render_intraday(snap)
 elif page == "Expiry":
-    render_expiry_dashboard(snap)
+    _render_expiry_dashboard_fragment(snap)
 elif page == "Factor Monitor":
     from providers.registry import get_provider
     from models.factor_state import FactorSnapshot

@@ -12,7 +12,6 @@ from typing import Any, Optional
 
 from models.snapshot import MarketSnapshot, FieldMeta
 from providers.base import BaseProvider
-from providers.greeks_calculator import GreeksCalculator, GreeksResult
 from providers.cache import cache, get_freshness_window
 
 log = logging.getLogger(__name__)
@@ -22,6 +21,7 @@ class GreeksProvider(BaseProvider):
     """Calculates Black-Scholes Greeks for NIFTY option contracts."""
 
     def __init__(self, risk_free_rate: float = 0.065, dividend_yield: float = 0.0):
+        from providers.greeks_calculator import GreeksCalculator
         self.calculator = GreeksCalculator(
             risk_free_rate=risk_free_rate,
             dividend_yield=dividend_yield,
@@ -60,7 +60,7 @@ class GreeksProvider(BaseProvider):
         try:
             from nse import NSE as NSEIndia
 
-            cache_key = "nse_options_chain"
+            cache_key = "nse_option_chain_raw"
             cached = cache.get(cache_key)
             if cached:
                 chain_data = cached.value
@@ -144,6 +144,7 @@ class GreeksProvider(BaseProvider):
         )
 
     def _build_snapshot(self, chain_data: dict) -> MarketSnapshot:
+        from providers.greeks_calculator import GreeksResult
         underlying = chain_data.get("underlying", 0)
         atm = chain_data.get("atm_strike", 0)
         strike_map = chain_data.get("strike_map", {})
@@ -152,6 +153,22 @@ class GreeksProvider(BaseProvider):
 
         if not all_strikes or not expiry_dates:
             return self._empty_snapshot()
+
+        today = datetime.now().strftime("%d-%b-%Y")
+        current_expiry = None
+        next_expiries = []
+        for exp in expiry_dates:
+            if exp >= today and current_expiry is None:
+                current_expiry = exp
+            elif exp >= today and current_expiry is not None:
+                next_expiries.append(exp)
+            if len(next_expiries) >= 2:
+                break
+        if not current_expiry:
+            current_expiry = expiry_dates[0]
+            next_expiries = [e for e in expiry_dates[1:3] if e >= today]
+        target_expiries = [current_expiry] + next_expiries[:2]
+        expiry_dates = target_expiries
 
         atm_idx = all_strikes.index(atm) if atm in all_strikes else len(all_strikes) // 2
         selected_strikes = []

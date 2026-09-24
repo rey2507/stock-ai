@@ -2,6 +2,7 @@
 
 import math
 import streamlit as st
+import pandas as pd
 from models.snapshot import MarketSnapshot, FieldMeta
 from models.verdict import Verdict
 from providers.data_quality import DataQualityEngine
@@ -81,8 +82,8 @@ def render_related_indices_section(snap: MarketSnapshot) -> None:
 
     domestic_indices = []
     for field_name, label in [
-        ("sensex_spot", "sensex_change_pct", "Sensex"),
-        ("banknifty_spot", "banknifty_change_pct", "Bank Nifty"),
+        ("sensex_spot", "Sensex"),
+        ("banknifty_spot", "Bank Nifty"),
     ]:
         spot_fm = getattr(snap, field_name, None)
         change_fm = getattr(snap, field_name.replace("_spot", "_change_pct"), None)
@@ -362,21 +363,25 @@ def data_source_banner(snap: MarketSnapshot):
     ts = snap.snapshot_timestamp
     ts_str = ts.strftime("%H:%M:%S IST") if ts else "N/A"
 
-    if status == "UNAVAILABLE":
-        st.error("LIVE DATA UNAVAILABLE")
-    elif status == "LIVE":
-        st.success(f"LIVE — Source: {source}")
-    elif status == "DELAYED":
-        st.warning(f"DELAYED — Source: {source}")
+    status_emoji = {
+        "LIVE": "🟢",
+        "DELAYED": "🟡",
+        "STALE": "🟠",
+        "UNAVAILABLE": "⚪",
+    }.get(status, "❓")
 
     dq = snap.compute_data_quality()
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.caption(f"**Source:** {source}")
-    with col2:
-        st.caption(f"**Last updated:** {ts_str}")
-    with col3:
-        st.caption(f"**Data Quality:** {dq['emoji']} {dq['level']}")
+    dq_text = f"{dq['emoji']} {dq['level']}" if dq else "UNAVAILABLE"
+
+    sources = [s.strip() for s in source.replace("+", "\n").split("\n") if s.strip()]
+    source_names = " · ".join(sources) if sources else "N/A"
+
+    if status == "UNAVAILABLE":
+        st.error("LIVE DATA UNAVAILABLE")
+    else:
+        st.markdown(f"{status_emoji} **{status}** · Data Quality: {dq_text}")
+    st.markdown(f"**Sources:** {source_names}")
+    st.markdown(f"**Last updated:** {ts_str}")
 
 
 def verdict_panel(v: Verdict):
@@ -590,3 +595,87 @@ def contribution_panel(verdict: Verdict):
                 st.markdown(f"  {e}")
             st.markdown(f"**→ {contrib}**")
             st.markdown("")
+
+
+def render_conclusion_bar(state: str, evidence: str, regime: str, persistence: str, summary: str, risk: str) -> None:
+    """Render the fixed-top conclusion bar for any page."""
+    state_upper = (state or "").upper()
+    if "BULLISH" in state_upper:
+        badge = "🟢"
+    elif "BEARISH" in state_upper:
+        badge = "🔴"
+    elif "CAUTION" in state_upper or "WEAK" in state_upper:
+        badge = "🟡"
+    else:
+        badge = "⚪"
+
+    with st.container(border=True):
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            st.markdown(f"### {badge} {state or 'UNKNOWN'}")
+        with col2:
+            parts = []
+            if evidence:
+                parts.append(f"**Evidence:** {evidence}")
+            if regime:
+                parts.append(f"**Regime:** {regime}")
+            if persistence:
+                parts.append(f"**Persistence:** {persistence}")
+            st.markdown(" | ".join(parts))
+        st.divider()
+
+        if summary:
+            summary_items = [s.strip() for s in summary.replace(" – ", "\n").replace(" ✗ ", "\n").replace(" ✓ ", "\n").split("\n") if s.strip()]
+            if summary_items:
+                st.markdown("**Summary:**")
+                for item in summary_items:
+                    st.markdown(f"- {item}")
+        if risk:
+            risk_items = [r.strip() for r in risk.replace(";", "\n").split("\n") if r.strip()]
+            if risk_items:
+                st.markdown("⚠️ **Main Risk:**")
+                for item in risk_items:
+                    st.markdown(f"- {item}")
+
+
+def render_what_changed(changes: list[tuple[str, str, str]]) -> None:
+    """Render the 'What Changed' section.
+
+    changes: list of (arrow_text, metric_text, timestamp_text)
+    """
+    if not changes:
+        return
+    st.markdown("### What Changed")
+    for arrow, metric, ts in changes[:4]:
+        st.markdown(f"{arrow} {metric} <span style='color:#666;font-size:0.85rem;'>{ts}</span>", unsafe_allow_html=True)
+
+
+def render_evidence_group(title: str, bullets: list[str], expanded: bool = False) -> None:
+    """Render an expandable evidence group."""
+    with st.expander(title, expanded=expanded):
+        for b in bullets:
+            st.markdown(f"- {b}")
+
+
+def render_data_status(name: str, status: str, timestamp: str = "") -> None:
+    """Render a single data freshness indicator."""
+    icon = {
+        "LIVE": "🟢",
+        "DELAYED": "🟡",
+        "STALE": "🟠",
+        "UNAVAILABLE": "⚪",
+    }.get(status, "❓")
+    ts = f" ({timestamp})" if timestamp else ""
+    st.write(f"{icon} {name}: {status}{ts}")
+
+
+def render_diagnostics(rows: list[dict]) -> None:
+    """Render collapsed diagnostics table.
+
+    rows: list of dicts with keys: name, status, timestamp, detail
+    """
+    if not rows:
+        return
+    with st.expander("[▶ Data Freshness & Diagnostics]", expanded=False):
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, hide_index=True)

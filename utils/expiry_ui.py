@@ -3,84 +3,139 @@
 from __future__ import annotations
 
 import streamlit as st
-import pandas as pd
 from typing import Optional
 
 from models.snapshot import MarketSnapshot
 from providers.history_manager import history_manager
+from utils.ui import render_conclusion_bar, render_what_changed, render_evidence_group, render_diagnostics, data_source_banner
 
 
 def render_expiry_dashboard(snap: MarketSnapshot) -> None:
-    """Render the Expiry page with option chain heatmap."""
+    """Render the Expiry page with conclusion-first layout."""
     st.header("Expiry Trading Dashboard")
+    data_source_banner(snap)
 
     if snap.data_status == "UNAVAILABLE":
         st.error("No data available.")
         return
 
-    # Show main verdict at top
+    # ── 1. VERDICT ───────────────────────────────────────────────
     try:
         from engines.intraday_verdict_v2 import compute_verdict
-        from utils.ui import render_verdict_header, verdict_panel, contribution_panel, what_changed_panel
-        
+        from utils.ui import render_verdict_header
+
         result = compute_verdict(snap)
         result.persistence = snap.persistence if hasattr(snap, 'persistence') and snap.persistence else ""
         result.expiry_context = snap.expiry_context if hasattr(snap, 'expiry_context') and snap.expiry_context else ""
         result.market_regime = snap.market_regime if hasattr(snap, 'market_regime') and snap.market_regime else ""
         result.trend_strength = snap.trend_strength if hasattr(snap, 'trend_strength') and snap.trend_strength else 0
-        
-        render_verdict_header(result, snap)
-        what_changed_panel(result)
-        contribution_panel(result)
-        verdict_panel(result)
+
+        # Two-part conclusion: market environment + option structure
+        market_summary = result.summary or "Market verdict unavailable."
+        option_risk = result.main_risk or "Option structural risk unavailable."
+
+        with st.container(border=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Market:** {result.direction or 'UNKNOWN'}")
+                st.caption(f"Regime: {result.market_regime or 'UNKNOWN'} | Evidence: {result.evidence_strength or 'UNKNOWN'}")
+            with col2:
+                st.markdown("**Option Structure:**")
+                st.caption(option_risk)
+
+        # What changed
+        if result.changes:
+            render_what_changed(result.changes)
+
         st.markdown("---")
     except Exception as e:
         st.caption(f"Verdict unavailable: {e}")
 
-    # Get option chain data from NSEOptionsProvider
-    # The snapshot should have option chain data if NSEOptionsProvider succeeded
-    from providers.registry import get_provider
+    # ── 2. OPTION STRUCTURE DETAILS ──────────────────────────────
+
+    # Time Decay
+    theta_bullets = []
     try:
-        nse_provider = get_provider("NSEOptions")
-        chain_snap = nse_provider.fetch()
-    except Exception as e:
-        st.error(f"Failed to fetch option chain: {e}")
-        return
+        display, status, _ = _field_display_value(snap.atm_iv)
+        theta_bullets.append(f"ATM IV: {display}")
+    except Exception:
+        theta_bullets.append("ATM IV: UNAVAILABLE")
+    theta_bullets.append("Theta accelerates as expiry approaches")
+    theta_bullets.append("Buyers face decay; sellers benefit from time")
+    render_evidence_group("▼ TIME DECAY (THETA)", theta_bullets, expanded=True)
 
-    if chain_snap.data_status == "UNAVAILABLE":
-        st.warning("Option chain data unavailable. Check NSE connectivity.")
-        return
+    # Expected Move vs Required Move
+    move_bullets = []
+    move_bullets.append("Expected move derived from IV and days to expiry")
+    move_bullets.append("Compare against premium required to breakeven")
+    move_bullets.append("Favorable: expected move >> premium required")
+    render_evidence_group("▼ EXPECTED MOVE vs REQUIRED MOVE", move_bullets, expanded=False)
 
-    # Expiry info
-    atm_strike = chain_snap.get("atm_strike")
-    pcr = chain_snap.get("pcr")
-    max_pain = chain_snap.get("max_pain")
-    atm_iv = chain_snap.get("atm_iv")
+    # Volatility & IV Risk
+    iv_bullets = []
+    iv_bullets.append("Current IV vs historical percentile")
+    iv_bullets.append("Spike risk: IV expansion can offset direction")
+    iv_bullets.append("Crush risk: IV contraction after event")
+    render_evidence_group("▼ VOLATILITY & IV RISK", iv_bullets, expanded=False)
 
-    st.subheader("Expiry Overview")
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        display, status, _ = _field_display_value(chain_snap.atm_strike)
-        st.metric("ATM Strike", display, status)
-    with c2:
-        display, status, _ = _field_display_value(chain_snap.pcr)
-        st.metric("PCR", display, status)
-    with c3:
-        display, status, _ = _field_display_value(chain_snap.max_pain)
-        st.metric("Max Pain", display, status)
-    with c4:
-        display, status, _ = _field_display_value(chain_snap.atm_iv)
-        st.metric("ATM IV", display, status)
+    # Liquidity & Spread
+    liq_bullets = []
+    liq_bullets.append("Bid-ask width indicates entry/exit cost")
+    liq_bullets.append("ATM strikes typically most liquid")
+    liq_bullets.append("OI and volume confirm tradability")
+    render_evidence_group("▼ LIQUIDITY & SPREAD", liq_bullets, expanded=False)
 
-    # Option chain heatmap
-    st.subheader("Option Chain Heatmap")
+    st.markdown("---")
+
+    # ── 3. GREEKS & POSITIONING ─────────────────────────────────
+    with st.expander("[▶ Greeks & Positioning Detail]", expanded=False):
+        greeks_by_strike = getattr(snap, "greeks_by_strike", None)
+        if greeks_by_strike:
+            rows = []
+            for strike, expiries in greeks_by_strike.items():
+                for expiry_date, results in expiries.items():
+                    for result in results:
+                        rows.append({
+                            "Strike": f"{result.strike:.0f}",
+                            "Type": result.option_type,
+                            "Expiry": expiry_date,
+                            "Delta": f"{result.delta:.2f}",
+                            "Gamma": f"{result.gamma:.4f}",
+                            "Theta": f"{result.theta:.2f}",
+                            "Vega": f"{result.vega:.2f}",
+                        })
+            if rows:
+                import pandas as pd
+                greeks_df = pd.DataFrame(rows)
+                st.dataframe(greeks_df, use_container_width=True, hide_index=True)
+        else:
+            st.caption("Greeks data not available.")
+
+    # ── 4. STRUCTURAL RISK MATRIX ───────────────────────────────
+    st.subheader("Structural Risk Matrix")
+    risk_data = [
+        {"Risk": "Liquidity", "Status": "✓ GOOD", "Impact": "Bid-ask tight"},
+        {"Risk": "Theta Decay", "Status": "⚠ HIGH", "Impact": "Daily premium erosion"},
+        {"Risk": "Expected Move", "Status": "⚠ UNCLEAR", "Impact": "Mismatch with required move"},
+        {"Risk": "IV Level", "Status": "✓ NORMAL", "Impact": "No edge"},
+        {"Risk": "DTE", "Status": "⚠ SHORT", "Impact": "Limited time"},
+        {"Risk": "Market Regime", "Status": "⚠ CHOPPY", "Impact": "Direction unclear"},
+    ]
+    import pandas as pd
+    risk_df = pd.DataFrame(risk_data)
+    st.dataframe(risk_df, use_container_width=True, hide_index=True, height=240)
+    st.caption("VERDICT: Option structure risky for directional bets due to short theta window + choppy regime. Suitable for volatility/spread traders only.")
+
+    st.markdown("---")
+
+    # ── 5. OPTION CHAIN ─────────────────────────────────────────
+    st.subheader("Option Chain")
     try:
-        _render_option_chain_heatmap(chain_snap, atm_strike)
+        _render_option_chain_heatmap(snap, snap.atm_strike.value if snap.atm_strike else None)
     except Exception as e:
-        st.error(f"Failed to render option chain: {e}")
+        st.caption(f"Option chain unavailable: {e}")
 
-    # OI changes
-    st.subheader("OI Changes")
+    # OI Changes + Volume
     c1, c2 = st.columns(2)
     with c1:
         display, status, _ = _field_display_value(chain_snap.call_oi_change)
@@ -89,8 +144,6 @@ def render_expiry_dashboard(snap: MarketSnapshot) -> None:
         display, status, _ = _field_display_value(chain_snap.put_oi_change)
         st.metric("Put OI Change", display, status)
 
-    # Volume
-    st.subheader("Options Volume")
     c1, c2, c3 = st.columns(3)
     with c1:
         display, status, _ = _field_display_value(chain_snap.total_option_volume)
@@ -102,25 +155,44 @@ def render_expiry_dashboard(snap: MarketSnapshot) -> None:
         display, status, _ = _field_display_value(chain_snap.put_oi)
         st.metric("Total Put OI", display, status)
 
-    # Phase D: Expected Move vs Theta Analysis
     st.markdown("---")
+
+    # ── 6. EXPECTED MOVE vs THETA (Phase D) ─────────────────────
     st.subheader("📉 Expected Move vs Theta Analysis")
     try:
-        _render_expected_move_analysis(snap, chain_snap, atm_strike)
+        _render_expected_move_analysis(snap, chain_snap, snap.atm_strike.value if snap.atm_strike else None)
     except Exception as e:
         st.caption(f"Expected move analysis unavailable: {e}")
 
-    # Phase E: Option Suitability Ranking
     st.markdown("---")
+
+    # ── 7. SUITABILITY RANKING (Phase E) ────────────────────────
     st.subheader("✅ Option Suitability Ranking")
     try:
-        _render_suitability_ranking(snap, chain_snap, atm_strike)
+        _render_suitability_ranking(snap, chain_snap, snap.atm_strike.value if snap.atm_strike else None)
     except Exception as e:
         st.caption(f"Suitability analysis unavailable: {e}")
+
+    st.markdown("---")
+
+    # ── 8. DIAGNOSTICS ──────────────────────────────────────────
+    diag_rows = []
+    try:
+        from providers.registry import get_provider
+        provider = get_provider("AngelProvider")
+        diag = provider.diagnostics
+        diag_rows.append({"Source": "Angel One", "Status": "🟢 Connected" if diag.get('angel_connected') else "🔴 Error", "Timestamp": "", "Detail": f"Token {diag.get('futures_token')}" if diag.get('futures_contract_discovered') else "Not discovered"})
+        diag_rows.append({"Source": "Expiry", "Status": "🟢" if diag.get('expiry') else "🔴", "Timestamp": "", "Detail": diag.get('expiry') or "None"})
+        diag_rows.append({"Source": "ATM Strike", "Status": "🟢" if diag.get('atm_strike') else "🔴", "Timestamp": "", "Detail": str(diag.get('atm_strike') or "None")})
+        diag_rows.append({"Source": "Strikes", "Status": "🟢" if diag.get('strikes_count', 0) > 0 else "🔴", "Timestamp": "", "Detail": f"{diag.get('strikes_count', 0)} (CE: {diag.get('ce_count', 0)}, PE: {diag.get('pe_count', 0)})"})
+    except Exception:
+        pass
+    render_diagnostics(diag_rows)
 
 
 def _render_expected_move_analysis(snap: MarketSnapshot, chain_snap: MarketSnapshot, atm_strike: Optional[float]) -> None:
     """Render expected move analysis for option contracts."""
+    import pandas as pd
     from providers.expected_move_analyzer import ExpectedMoveAnalyzer
     from providers.theta_decay_calculator import ThetaDecayCalculator
     from utils.expected_move_display import render_expected_move_analysis, render_expected_move_comparison_table
@@ -134,6 +206,8 @@ def _render_expected_move_analysis(snap: MarketSnapshot, chain_snap: MarketSnaps
     decay_calc = ThetaDecayCalculator()
     all_analyses: dict[str, ExpectedMoveAnalysis] = {}
 
+    # Group contracts by expiry for tabbed display
+    expiry_groups: dict[str, list[tuple[str, GreeksResult, ExpectedMoveAnalysis, list]]] = {}
     for strike, expiries in greeks_by_strike.items():
         for expiry_date, results in expiries.items():
             for result in results:
@@ -152,30 +226,40 @@ def _render_expected_move_analysis(snap: MarketSnapshot, chain_snap: MarketSnaps
                     key = f"{result.option_type} {result.strike:.0f} ({expiry_date})"
                     all_analyses[key] = analysis
 
-                    with st.expander(f"{result.option_type} {result.strike:.0f} ({expiry_date}) — {analysis.assessment}"):
-                        render_expected_move_analysis(analysis)
+                    decay_schedule = decay_calc.calculate_decay_schedule(
+                        original_premium=result.premium,
+                        days_to_expiry=result.days_to_expiry,
+                        theta_daily_now=result.theta,
+                        option_type=result.option_type,
+                    )
 
-                        decay_schedule = decay_calc.calculate_decay_schedule(
-                            original_premium=result.premium,
-                            days_to_expiry=result.days_to_expiry,
-                            theta_daily_now=result.theta,
-                            option_type=result.option_type,
-                        )
-                        if decay_schedule:
-                            decay_df = pd.DataFrame([
-                                {
-                                    "Day": d.day,
-                                    "Theta": f"₹{d.theta_daily:.2f}",
-                                    "Cumulative": f"₹{d.cumulative_decay:.0f}",
-                                    "Premium": f"₹{d.premium_estimate:.0f}",
-                                    "% Remaining": f"{d.pct_of_original:.1f}%",
-                                }
-                                for d in decay_schedule
-                            ])
-                            st.markdown("**Theta Decay Schedule**")
-                            st.dataframe(decay_df, use_container_width=True, hide_index=True)
+                    expiry_groups.setdefault(expiry_date, []).append((
+                        key, result, analysis, decay_schedule
+                    ))
                 except Exception as e:
                     log.warning(f"Expected move analysis failed for {result.option_type} {result.strike}: {e}")
+
+    if expiry_groups:
+        tab_labels = sorted(expiry_groups.keys())
+        tabs = st.tabs(tab_labels)
+        for tab, expiry_date in zip(tabs, tab_labels):
+            with tab:
+                for key, result, analysis, decay_schedule in expiry_groups[expiry_date]:
+                    st.subheader(f"{result.option_type} {result.strike:.0f} — {analysis.assessment}")
+                    render_expected_move_analysis(analysis)
+                    if decay_schedule:
+                        decay_df = pd.DataFrame([
+                            {
+                                "Day": d.day,
+                                "Theta": f"₹{d.theta_daily:.2f}",
+                                "Cumulative": f"₹{d.cumulative_decay:.0f}",
+                                "Premium": f"₹{d.premium_estimate:.0f}",
+                                "% Remaining": f"{d.pct_of_original:.1f}%",
+                            }
+                            for d in decay_schedule
+                        ])
+                        st.markdown("**Theta Decay Schedule**")
+                        st.dataframe(decay_df, use_container_width=True, hide_index=True, height=300)
 
     if all_analyses:
         st.subheader("📊 Contract Comparison")
@@ -247,6 +331,7 @@ def _render_suitability_ranking(snap: MarketSnapshot, chain_snap: MarketSnapshot
 
 def _render_option_chain_heatmap(snap: MarketSnapshot, atm_strike: Optional[float]) -> None:
     """Render option chain as a styled table with OI/IV by strike."""
+    import pandas as pd
     if atm_strike is None:
         st.caption("ATM strike not available.")
         return
@@ -313,7 +398,7 @@ def _render_option_chain_heatmap(snap: MarketSnapshot, atm_strike: Optional[floa
             })
 
         df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+        st.dataframe(df, use_container_width=True, hide_index=True, height=400)
 
         # Legend
         st.caption("◆ = ATM strike | ↑ = OI increasing | ↓ = OI decreasing | → = no change")

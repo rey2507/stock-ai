@@ -90,6 +90,7 @@ class NSEOptionsProvider(BaseProvider):
 
             raw_data = records.get("data", [])
             underlying = records.get("underlyingValue", spot)
+            expiry_dates = records.get("expiryDates", [])
 
             # Filter by expiry and build strike map
             strike_map: dict[float, dict] = {}
@@ -148,6 +149,7 @@ class NSEOptionsProvider(BaseProvider):
             return {
                 "underlying": underlying,
                 "expiry": expiry_str,
+                "expiry_dates": expiry_dates,
                 "atm_strike": atm,
                 "atm_iv": atm_iv,
                 "total_call_oi": total_call_oi,
@@ -293,6 +295,12 @@ class NSEOptionsProvider(BaseProvider):
                 cache.put(
                     cache_key,
                     snapshot,
+                    source="NSEIndiaApi",
+                    freshness_window=get_freshness_window("oi"),
+                )
+                cache.put(
+                    "nse_option_chain_raw",
+                    chain_data,
                     source="NSEIndiaApi",
                     freshness_window=get_freshness_window("oi"),
                 )
