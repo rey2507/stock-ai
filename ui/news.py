@@ -111,6 +111,19 @@ def _source_badge(source: str) -> str:
 
 # ─── Main Render Functions ──────────────────────────────────────────
 
+# Source website URLs for "Read more" links
+SOURCE_URLS = {
+    "Reuters": "https://www.reuters.com/world/india/",
+    "Economic Times": "https://economictimes.indiatimes.com/markets/stocks",
+    "Business Standard": "https://www.business-standard.com/markets",
+    "Moneycontrol": "https://www.moneycontrol.com/news/business/markets/",
+    "Mint": "https://www.livemint.com/market",
+    "NSE": "https://www.nseindia.com/companies-listing/corporate-filings-announcements",
+    "RBI": "https://www.rbi.org.in/Scripts/BS_PressReleaseDisplay.aspx",
+    "Official": "https://www.nseindia.com",
+}
+
+
 def render_news_section(snapshot: Optional[NewsSnapshot], title: str = "Pre-Market News") -> None:
     """Render complete pre-market news section."""
     if not snapshot or not snapshot.items:
@@ -143,6 +156,23 @@ def render_news_section(snapshot: Optional[NewsSnapshot], title: str = "Pre-Mark
             f"Total fetched: {snapshot.total_fetched} | "
             f"Deduped: {snapshot.total_deduped}"
         )
+
+    # Read more links
+    _render_read_more_links(snapshot.source_status)
+
+
+def _render_read_more_links(source_status: dict) -> None:
+    """Render 'Read more' links to source websites."""
+    st.markdown("---")
+    st.markdown("**Read more on source websites:**")
+    cols = st.columns(min(len(source_status), 4))
+    for i, (source, status) in enumerate(source_status.items()):
+        if status not in ("LIVE", "EMPTY"):  # Only show for active/configured sources
+            continue
+        url = SOURCE_URLS.get(source)
+        if url:
+            with cols[i % 4]:
+                st.markdown(f"[{_source_badge(source)} {source}]({url})", unsafe_allow_html=True)
 
 
 def _render_source_health(source_status: dict) -> None:
