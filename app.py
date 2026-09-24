@@ -697,9 +697,7 @@ def _render_weekly(snap: MarketSnapshot):
     render_diagnostics(diag_rows)
 
 
-# ─── Sidebar + Route ───────────────────────────────────────────
-
-page = render_production_sidebar()
+# ─── Route ────────────────────────────────────────────────
 
 if page == "Intraday":
     _render_intraday(snap)
