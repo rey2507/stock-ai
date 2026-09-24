@@ -180,7 +180,9 @@ def _render_news_by_category(items: List[NewsItem]) -> None:
         if not cat_items:
             continue
 
-        with st.expander(f"{_category_badge(cat)} {len(cat_items)} article(s)", expanded=(cat in ["NIFTY_50", "BANK_NIFTY", "RBI"])):
+        # Render category header with badge
+        st.markdown(f"{_category_badge(cat)} **{cat.replace('_', ' ')}** — {len(cat_items)} article(s)", unsafe_allow_html=True)
+        with st.expander("View articles", expanded=(cat in ["NIFTY_50", "BANK_NIFTY", "RBI"])):
             for item in cat_items:
                 _render_news_card(item)
 
