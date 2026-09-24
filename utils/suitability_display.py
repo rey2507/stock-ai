@@ -98,7 +98,7 @@ def render_suitability_ranking(scores: List[SuitabilityScore]) -> None:
             return "background-color: #FFB6C6"
         return ""
 
-    styled_df = df.style.applymap(
+    styled_df = df.style.map(
         lambda val: color_recommendation(val) if val in ("BUY", "ACCEPT", "CAUTION", "AVOID", "DO_NOT_TRADE") else ""
     )
 

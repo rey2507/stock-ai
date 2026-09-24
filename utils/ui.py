@@ -202,10 +202,9 @@ def render_verdict_header(v: Verdict, snap: MarketSnapshot) -> None:
     
     Layout:
     - Main verdict with color coding
-    - Score and trend strength as prominent metrics
-    - Factor bias line (net bullish/bearish factors)
-    - Evidence strength line
-    - Context line (persistence, regime, expiry)
+    - Trend Score as prominent metric out of 100
+    - Evidence strength as prominent metric
+    - Regime + persistence as context
     - Data quality with tooltip
     """
     color_map = {
@@ -233,11 +232,32 @@ def render_verdict_header(v: Verdict, snap: MarketSnapshot) -> None:
         ctx_parts.append(v.expiry_context.lower().replace("_", " "))
     ctx_str = " · ".join(ctx_parts)
     
-    # Build strength fragment
-    strength_str = ""
-    if v.trend_strength > 0:
-        strength_label = trend_strength_label(v.trend_strength)
-        strength_str = f"Evidence: {v.trend_strength}/100 ({strength_label})"
+    # Primary score is trend_strength out of 100
+    strength_label = trend_strength_label(v.trend_strength) if v.trend_strength > 0 else "UNKNOWN"
+    strength_str = f"Evidence: {v.trend_strength}/100 ({strength_label})"
+    
+    # Related indices summary with actual values
+    related_summary = []
+    related_component = v.components.get("Related Indices")
+    if related_component and related_component.score != 0:
+        related_summary.append(f"Related Indices: {related_component.label}")
+    
+    # Show actual related index values from snapshot if available
+    if snap:
+        related_values = []
+        sensex_change = getattr(snap, "sensex_change_pct", None)
+        banknifty_change = getattr(snap, "banknifty_change_pct", None)
+        giftnifty_change = getattr(snap, "giftnifty_change_pct", None)
+        
+        if isinstance(sensex_change, FieldMeta) and sensex_change.value is not None:
+            related_values.append(f"Sensex: {sensex_change.value:+.2f}%")
+        if isinstance(banknifty_change, FieldMeta) and banknifty_change.value is not None:
+            related_values.append(f"Bank Nifty: {banknifty_change.value:+.2f}%")
+        if isinstance(giftnifty_change, FieldMeta) and giftnifty_change.value is not None:
+            related_values.append(f"GIFT Nifty: {giftnifty_change.value:+.2f}%")
+        
+        if related_values:
+            related_summary.append(" | ".join(related_values))
     
     # Build factor bias fragment
     factor_str = ""
@@ -258,24 +278,28 @@ def render_verdict_header(v: Verdict, snap: MarketSnapshot) -> None:
     score_color = "green" if v.raw_score > 0 else ("red" if v.raw_score < 0 else "orange")
     strength_color = "green" if v.trend_strength >= 70 else ("orange" if v.trend_strength >= 40 else "red")
     
+    related_str = " | ".join(related_summary) if related_summary else ""
+    
     html = f"""
     <div style="padding:1.2rem;border-radius:10px;background:{bg};border-left:5px solid {color};margin-bottom:0.5rem;">
         <span style="font-size:1.4em;font-weight:bold">{v.emoji} {v.display_label}</span>
         <br>
-        <span style="font-size:0.95em;color:#333">{strength_str}</span>
-        <br>
+        <span style="font-size:0.95em;color:#333; font-weight:bold">Trend Score: {v.trend_strength}/100</span> &nbsp;|&nbsp;
+        <span style="font-size:0.85em;color:#555">{strength_str}</span> &nbsp;|&nbsp;
         <span style="font-size:0.85em;color:#555">{ctx_str}</span>
         <br>
         <span style="font-size:0.85em;color:#333">{factor_str}</span>
+        <br>
+        <span style="font-size:0.85em;color:#555">{related_str}</span>
     </div>
     """
     st.markdown(html, unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        colored_metric("Score", f"{v.raw_score:+d}", score_color)
+        colored_metric("Trend Score", f"{v.trend_strength}/100", strength_color)
     with col2:
-        colored_metric("Trend Strength", f"{v.trend_strength}/100", strength_color)
+        colored_metric("Evidence", v.data_quality or "UNKNOWN", "gray")
     with col3:
         st.markdown(f"<div style='margin-bottom:0.75rem;'><div style='font-size:0.85rem; color:#444;'>Data Quality</div><div style='font-size:1.25rem; font-weight:bold;'><span title='{quality_explanation}'>{v.data_quality} ⓘ</span></div></div>", unsafe_allow_html=True)
 
@@ -419,7 +443,8 @@ def verdict_panel(v: Verdict):
     html = (
         f"<div style='padding:1rem;border-radius:8px;background:{bg};border-left:5px solid {color}'>"
         f"<span style='font-size:1.1em;font-weight:bold'>{v.emoji} {v.display_label}</span><br>"
-        f"<span style='font-size:0.85em;color:#666'>Score: {v.raw_score:+d} | Quality: {v.data_quality}{conflict_str}{persistence_str}{expiry_str}{regime_str}{strength_str}{factor_summary}</span>"
+        f"<span style='font-size:0.9em;font-weight:bold;color:#222'>Trend Score: {v.trend_strength}/100</span> &nbsp;"
+        f"<span style='font-size:0.85em;color:#666'>| Quality: {v.data_quality}{conflict_str}{persistence_str}{expiry_str}{regime_str}{strength_str}{factor_summary}</span>"
         f"</div>"
     )
     st.markdown(html, unsafe_allow_html=True)
@@ -573,31 +598,35 @@ def contribution_panel(verdict: Verdict):
     if not verdict or not verdict.components:
         return
 
-    with st.expander("Why this conclusion?", expanded=False):
+    with st.expander("Component Contribution", expanded=False):
+        rows = []
         for name, comp in verdict.components.items():
             score = comp.score
             if score == 1:
                 emoji = "🟢"
-                contrib = "Bullish contribution"
+                contrib = "Improving"
             elif score == -1:
                 emoji = "🔴"
-                contrib = "Bearish contribution"
+                contrib = "Deteriorating"
             else:
                 if comp.label == "Insufficient Data":
                     emoji = "⚪"
-                    contrib = "Insufficient evidence"
+                    contrib = "Insufficient"
                 else:
                     emoji = "🟡"
-                    contrib = "Mixed / neutral"
+                    contrib = "Neutral"
+            rows.append({
+                "Component": name,
+                "Score": f"{score:+d}" if score != 0 else "--",
+                "State": emoji,
+                "Interpretation": contrib,
+            })
+        import pandas as pd
+        df = pd.DataFrame(rows)
+        st.dataframe(df, use_container_width=True, hide_index=True)
 
-            st.markdown(f"**{emoji} {name}**")
-            for e in comp.evidence:
-                st.markdown(f"  {e}")
-            st.markdown(f"**→ {contrib}**")
-            st.markdown("")
 
-
-def render_conclusion_bar(state: str, evidence: str, regime: str, persistence: str, summary: str, risk: str) -> None:
+def render_conclusion_bar(state: str, evidence: str, regime: str, persistence: str, summary: str, risk: str, trend_score: int | None = None) -> None:
     """Render the fixed-top conclusion bar for any page."""
     state_upper = (state or "").upper()
     if "BULLISH" in state_upper:
@@ -613,15 +642,25 @@ def render_conclusion_bar(state: str, evidence: str, regime: str, persistence: s
         col1, col2 = st.columns([1, 3])
         with col1:
             st.markdown(f"### {badge} {state or 'UNKNOWN'}")
+            if trend_score is not None:
+                display_score = trend_score if trend_score > 0 else 0
+                score_color = "green" if display_score >= 70 else ("orange" if display_score >= 40 else "red")
+                st.markdown(f"**Trend Score**")
+                st.markdown(f"<span style='font-size:1.5em; font-weight:bold; color:{score_color}'>{display_score}/100</span>", unsafe_allow_html=True)
         with col2:
-            parts = []
+            meta_items = []
             if evidence:
-                parts.append(f"**Evidence:** {evidence}")
+                meta_items.append(("Evidence", evidence))
             if regime:
-                parts.append(f"**Regime:** {regime}")
+                meta_items.append(("Regime", regime))
             if persistence:
-                parts.append(f"**Persistence:** {persistence}")
-            st.markdown(" | ".join(parts))
+                meta_items.append(("Persistence", persistence))
+            if meta_items:
+                meta_cols = st.columns(len(meta_items))
+                for col, (label, value) in zip(meta_cols, meta_items):
+                    with col:
+                        st.caption(label)
+                        st.markdown(f"**{value}**")
         st.divider()
 
         if summary:

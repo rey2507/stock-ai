@@ -30,22 +30,17 @@ def render_expiry_dashboard(snap: MarketSnapshot) -> None:
         result.market_regime = snap.market_regime if hasattr(snap, 'market_regime') and snap.market_regime else ""
         result.trend_strength = snap.trend_strength if hasattr(snap, 'trend_strength') and snap.trend_strength else 0
 
-        # Two-part conclusion: market environment + option structure
-        market_summary = result.summary or "Market verdict unavailable."
-        option_risk = result.main_risk or "Option structural risk unavailable."
+        # Market view verdict
+        st.markdown("### MARKET VIEW")
+        render_verdict_header(result, snap)
 
-        with st.container(border=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**Market:** {result.direction or 'UNKNOWN'}")
-                st.caption(f"Regime: {result.market_regime or 'UNKNOWN'} | Evidence: {result.evidence_strength or 'UNKNOWN'}")
-            with col2:
-                st.markdown("**Option Structure:**")
-                st.caption(option_risk)
+        # Option structure caution
+        st.markdown("### OPTION STRUCTURE")
+        option_risk = result.main_risk or "Option structural risk unavailable."
+        st.caption(option_risk)
 
         # What changed
-        if result.changes:
-            render_what_changed(result.changes)
+        what_changed_panel(result)
 
         st.markdown("---")
     except Exception as e:

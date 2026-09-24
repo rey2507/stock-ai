@@ -325,6 +325,7 @@ def _render_intraday(snap: MarketSnapshot):
         persistence=result.persistence or "UNKNOWN",
         summary=" ".join(result.reasons) if result.reasons else "",
         risk="; ".join(result.timeframe_conflicts) if result.timeframe_conflicts else "",
+        trend_score=result.trend_strength,
     )
 
     # What changed
@@ -517,6 +518,7 @@ def _render_weekly(snap: MarketSnapshot):
         persistence=result.persistence or "UNKNOWN",
         summary=" ".join(result.reasons) if result.reasons else "",
         risk="; ".join(result.timeframe_conflicts) if result.timeframe_conflicts else "",
+        trend_score=result.trend_strength,
     )
 
     # What changed

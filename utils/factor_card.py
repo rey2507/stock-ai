@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 import streamlit as st
 from models.factor_state import FactorState, FactorDirection, Acceleration, Persistence
 from utils.ui import render_conclusion_bar, render_evidence_group, render_diagnostics
+
+log = logging.getLogger(__name__)
 
 
 def _direction_color(direction: FactorDirection) -> str:
@@ -29,6 +32,7 @@ def _direction_emoji(direction: FactorDirection) -> str:
     return mapping.get(direction, "⚪")
 
 
+@st.fragment(run_every=10)
 def render_factor_monitor(factor_snapshot) -> None:
     """Render the full Factor Monitor page with table-first layout."""
     if not factor_snapshot or not factor_snapshot.factors:
@@ -80,14 +84,23 @@ def render_factor_monitor(factor_snapshot) -> None:
         direction_text = state.direction.value
         accel_text = state.acceleration.value
         change_str = f"{state.change_pct:+.2f}%" if isinstance(state.change_pct, (int, float)) else "N/A"
+        value_str = f"{state.current_value:,.2f}" if isinstance(state.current_value, (int, float)) else "N/A"
+        data_quality = state.history_quality if state.history_quality != "INSUFFICIENT" else "INSUFFICIENT"
+        data_age = f"{state.data_age_seconds:.0f}s" if state.data_age_seconds else "N/A"
+        source = state.source or "UNKNOWN"
+        evidence = " | ".join(state.evidence) if state.evidence else ""
         rows.append({
             "Factor": state.factor_name,
-            "Value": f"{state.current_value:,.2f}" if isinstance(state.current_value, (int, float)) else "N/A",
+            "Value": value_str,
             "Change": change_str,
             "Direction": direction_text,
             "Trend": accel_text,
             "Confidence": state.confidence,
             "Relevance": state.nifty_relevance,
+            "Source": source,
+            "Data Age": data_age,
+            "Quality": data_quality,
+            "Evidence": evidence,
         })
 
     if rows:
@@ -103,7 +116,16 @@ def render_factor_monitor(factor_snapshot) -> None:
                 return "color: orange"
             return "color: gray"
 
-        styled = df.style.applymap(color_direction, subset=["Direction", "Trend"])
+        def color_quality(val):
+            if val == "SUFFICIENT":
+                return "color: green"
+            elif val == "MODERATE":
+                return "color: orange"
+            elif val == "INSUFFICIENT":
+                return "color: red"
+            return "color: gray"
+
+        styled = df.style.map(color_direction, subset=["Direction", "Trend"]).map(color_quality, subset=["Quality"])
         st.dataframe(styled, use_container_width=True, hide_index=True)
 
     st.markdown("---")
