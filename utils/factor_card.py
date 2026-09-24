@@ -83,56 +83,43 @@ def render_factor_monitor(factor_snapshot=None) -> None:
             st.markdown(part)
         st.markdown("---")
 
-    # ── 2. FACTOR DETAIL TABLE ──────────────────────────────────
+    # ── 2. FACTOR DETAIL ──────────────────────────────────────────
     st.markdown("### Factor Detail")
-    rows = []
-    for state in states:
-        direction_text = state.direction.value
-        accel_text = state.acceleration.value
-        change_str = f"{state.change_pct:+.2f}%" if isinstance(state.change_pct, (int, float)) else "N/A"
-        value_str = f"{state.current_value:,.2f}" if isinstance(state.current_value, (int, float)) else "N/A"
-        data_quality = state.history_quality if state.history_quality != "INSUFFICIENT" else "INSUFFICIENT"
-        data_age = f"{state.data_age_seconds:.0f}s" if state.data_age_seconds else "N/A"
-        source = state.source or "UNKNOWN"
-        evidence = " | ".join(state.evidence) if state.evidence else ""
-        rows.append({
-            "Factor": state.factor_name,
-            "Value": value_str,
-            "Change": change_str,
-            "Direction": direction_text,
-            "Trend": accel_text,
-            "Confidence": state.confidence,
-            "Relevance": state.nifty_relevance,
-            "Source": source,
-            "Data Age": data_age,
-            "Quality": data_quality,
-            "Evidence": evidence,
-        })
-
-    if rows:
-        import pandas as pd
-        df = pd.DataFrame(rows)
-
-        def color_direction(val):
-            if val in ("BULLISH",):
-                return "color: green"
-            elif val in ("BEARISH",):
-                return "color: red"
-            elif val in ("REVERSING", "MIXED"):
-                return "color: orange"
-            return "color: gray"
-
-        def color_quality(val):
-            if val == "SUFFICIENT":
-                return "color: green"
-            elif val == "MODERATE":
-                return "color: orange"
-            elif val == "INSUFFICIENT":
-                return "color: red"
-            return "color: gray"
-
-        styled = df.style.map(color_direction, subset=["Direction", "Trend"]).map(color_quality, subset=["Quality"])
-        st.dataframe(styled, width='stretch', hide_index=True)
+    if states:
+        dir_emoji = {
+            FactorDirection.BULLISH: "🟢",
+            FactorDirection.BEARISH: "🔴",
+            FactorDirection.REVERSING: "🟡",
+            FactorDirection.MIXED: "🟡",
+            FactorDirection.NEUTRAL: "⚪",
+            FactorDirection.INSUFFICIENT_DATA: "⚪",
+        }
+        accel_emoji = {
+            Acceleration.ACCELERATING: "🔥",
+            Acceleration.STEADY: "🚗",
+            Acceleration.DECELERATING: "⚠️",
+            Acceleration.UNKNOWN: "❓",
+        }
+        for state in states:
+            with st.container(border=True):
+                cols = st.columns([2, 1, 1, 1, 1, 2])
+                with cols[0]:
+                    st.markdown(f"**{state.factor_name}**")
+                with cols[1]:
+                    st.caption(state.direction.value)
+                with cols[2]:
+                    st.caption(accel_emoji.get(state.acceleration, "❓"))
+                with cols[3]:
+                    change_str = f"{state.change_pct:+.2f}%" if isinstance(state.change_pct, (int, float)) else "N/A"
+                    st.caption(change_str)
+                with cols[4]:
+                    value_str = f"{state.current_value:,.2f}" if isinstance(state.current_value, (int, float)) else "N/A"
+                    st.caption(value_str)
+                with cols[5]:
+                    relevance = state.nifty_relevance if state.nifty_relevance != "UNCLEAR" else "NEUTRAL"
+                    st.caption(relevance)
+                if state.evidence:
+                    st.caption(" | ".join(state.evidence))
 
     st.markdown("---")
 

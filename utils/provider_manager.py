@@ -1,9 +1,8 @@
-"""Provider Manager — fallback logic, health tracking, and UI controls.
+"""Provider Manager — backend-only fallback logic, health tracking.
 
 Responsibilities:
 - Track provider health/freshness
 - Auto-fallback when primary fails
-- Expose UI controls for manual override
 - Cache last-known-good snapshots during outages
 """
 
@@ -14,7 +13,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 from threading import Lock
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from providers.registry import get_provider, list_providers
 from providers.source_registry import registry
@@ -64,7 +63,6 @@ class ProviderManager:
     def __init__(self):
         self._lock = Lock()
         self._health: dict[str, ProviderHealth] = {}
-        self._primary_overrides: dict[str, str] = {}
         self._last_snapshot: Optional[Any] = None
         self._last_snapshot_ts: Optional[datetime] = None
 
@@ -95,21 +93,8 @@ class ProviderManager:
             available = [p for p in list_providers() if self._is_provider_available(p)]
         return available
 
-    def set_primary_override(self, domain: str, provider_name: str) -> None:
-        """Manually override primary provider for a domain."""
-        with self._lock:
-            self._primary_overrides[domain] = provider_name
-
-    def clear_primary_override(self, domain: str) -> None:
-        """Clear manual override for a domain."""
-        with self._lock:
-            self._primary_overrides.pop(domain, None)
-
     def get_primary_for_domain(self, domain: str) -> Optional[str]:
         """Get the primary provider name for a domain."""
-        override = self._primary_overrides.get(domain)
-        if override:
-            return override
         chain = PROVIDER_FALLBACK_CHAIN.get(domain, list_providers())
         for name in chain:
             if self._is_provider_available(name):
@@ -166,65 +151,6 @@ class ProviderManager:
                     "consecutive_failures": health.consecutive_failures,
                 })
             return results
-
-    def render_provider_controls(self, current_domain: str = "market_data") -> str:
-        """Render Streamlit provider controls. Returns selected provider."""
-        import streamlit as st
-
-        providers = list_providers()
-        if not providers:
-            st.caption("No providers available")
-            return "none"
-
-        current_primary = self.get_primary_for_domain(current_domain) or "none"
-        display_names = {
-            "AngelProvider": "Angel One (SmartAPI)",
-            "NSEOptions": "NSE Options",
-            "WebSource": "Web Sources",
-            "Macro": "Macro",
-            "CapitalFlows": "Capital Flows",
-            "Sector": "Sector",
-            "FactorDirection": "Factor Direction",
-            "Greeks": "Greeks",
-        }
-
-        col1, col2 = st.columns([2, 1])
-        with col1:
-            options = [display_names.get(p, p) for p in providers]
-            current_idx = providers.index(current_primary) if current_primary in providers else 0
-            selected_display = st.radio(
-                "Primary Provider",
-                options,
-                index=current_idx,
-                key=f"provider_select_{current_domain}",
-                help="Manual override. Falls back automatically on failure.",
-            )
-            selected = providers[options.index(selected_display)]
-
-        with col2:
-            st.caption("")
-            if st.button("↩ Auto", key=f"provider_auto_{current_domain}"):
-                self.clear_primary_override(current_domain)
-                st.rerun()
-            if st.button("🔄 Test", key=f"provider_test_{current_domain}"):
-                with st.spinner("Testing..."):
-                    try:
-                        prov = get_provider(selected)
-                        snap = prov.fetch()
-                        if snap and snap.data_status != "UNAVAILABLE":
-                            st.success(f"{selected}: OK ({snap.data_status})")
-                            self.record_success(selected)
-                        else:
-                            st.error(f"{selected}: UNAVAILABLE")
-                            self.record_failure(selected)
-                    except Exception as e:
-                        st.error(f"{selected}: {e}")
-                        self.record_failure(selected)
-
-        if selected != current_primary:
-            self.set_primary_override(current_domain, selected)
-
-        return selected
 
 
 # Global singleton
