@@ -57,6 +57,7 @@ INDEX_TOKENS: dict[str, tuple[str, str]] = {
     "BANKNIFTY": ("NSE", "99926009"),
     "FINNIFTY": ("NSE", "99926037"),
     "MIDCPNIFTY": ("NSE", "99926048"),
+    "SENSEX": ("BSE", "99919000"),
 }
 
 _CANDLE_INTERVALS = {

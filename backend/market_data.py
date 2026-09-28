@@ -53,7 +53,7 @@ BASE_EQUITY_SPOT: Dict[str, float] = {
 
 # Base annualised ATM IV per underlying (indices carry skew; stocks pump).
 BASE_IV: Dict[str, float] = {
-    "NIFTY": 0.13, "BANKNIFTY": 0.15, "FINNIFTY": 0.14, "MIDCPNIFTY": 0.17,
+    "NIFTY": 0.13, "BANKNIFTY": 0.15, "FINNIFTY": 0.14, "MIDCPNIFTY": 0.17, "SENSEX": 0.14,
     "RELIANCE": 0.22, "TCS": 0.20, "INFY": 0.21, "HDFCBANK": 0.21,
     "ICICIBANK": 0.22, "SBIN": 0.24, "ITC": 0.18, "TATAMOTORS": 0.28,
     "AXISBANK": 0.23, "LT": 0.21,
@@ -110,7 +110,7 @@ class MockMarketData(MarketDataSource):
             base = INDEX_SPOT[symbol]
         elif symbol in self._base:
             base = self._base[symbol]
-        elif symbol in ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY"):
+        elif symbol in ("NIFTY", "BANKNIFTY", "FINNIFTY", "MIDCPNIFTY", "SENSEX"):
             base = INDEX_SPOT[symbol]
         else:
             raise KeyError(f"Unknown underlying: {symbol}")

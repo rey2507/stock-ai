@@ -44,6 +44,7 @@ _INDEX_TICKER_MAP: dict[str, str] = {
     "BANKNIFTY": "^NSEBANK",
     "FINNIFTY": "NIFTY_FIN_SERVICE.NS",
     "MIDCPNIFTY": "^NSEMDCP50",
+    "SENSEX": "^BSESN",
 }
 
 # yfinance interval strings + the max history each supports.

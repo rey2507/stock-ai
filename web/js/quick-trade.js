@@ -20,6 +20,7 @@ function quickTradeApplyChain(data) {
     expiries: data.expiries || [],
     strikes: data.rows.map((r) => r.strike),
     spot: data.spot,
+    rows: data.rows,          // kept so the ticket can show a live LTP
   };
 }
 
@@ -50,34 +51,36 @@ function openQuickTicket(optionType) {
     symbol: QuickTrade.symbol,
     instrumentType: optionType,
     expiry: QuickTrade.expiry || "",
-    strike: QuickTrade.atmStrike || 0,
+    strike: QuickTrade.atmStrike || null,   // resolved by enrichment shortly
     presetSide: "BUY",
     strikeEditable: true,
     strikeOptions: strikes.length ? strikes : [QuickTrade.atmStrike].filter(Boolean),
   });
-  // Enrich in the background (ATM/expiry/lot) and live-update the open ticket.
+  // Enrich in the background (ATM/expiry/lot/LTP) and redraw the open
+  // ticket with the resolved contract. The old code wrote to element ids
+  // that no longer exist after the ticket redesign — re-rendering is the
+  // only reliable way to reflect enrichment in the current UI.
   quickTradeContext().then(() => {
     if (!document.querySelector(".modal")) return;
-    if (QuickTrade.expiry) TradeModal.context.expiry = QuickTrade.expiry;
+    const ctx = TradeModal.context;
+    if (QuickTrade.expiry) ctx.expiry = QuickTrade.expiry;
     if (QuickTrade.atmStrike) {
-      TradeModal.context.strike = QuickTrade.atmStrike;
-      TradeModal.context.strikeOptions = QuickTrade.chainMeta?.strikes || [QuickTrade.atmStrike];
-      const titleEl = document.querySelector(".modal h2");
-      if (titleEl) {
-        titleEl.innerHTML =
-          `${QuickTrade.symbol} ${QuickTrade.atmStrike} ${optionType} ${QuickTrade.expiry || ""} <span class="badge muted">${optionType}</span>`;
-      }
-      // Refresh the strike selector options now that we have the ladder.
-      const sel = document.getElementById("t-strike");
-      if (sel) {
-        sel.innerHTML = TradeModal.context.strikeOptions.map((s) =>
-          `<option value="${s}" ${s === QuickTrade.atmStrike ? "selected" : ""}>${s}</option>`).join("");
-      }
+      ctx.strike = QuickTrade.atmStrike;
+      ctx.strikeOptions = QuickTrade.chainMeta?.strikes || [QuickTrade.atmStrike];
+      const row = (QuickTrade.chainMeta?.rows || [])
+        .find((r) => Number(r.strike) === Number(QuickTrade.atmStrike));
+      const q = row ? (optionType === "CE" ? row.ce : row.pe) : null;
+      if (q) ctx.quote = { ltp: q.ltp, iv: q.iv, delta: q.delta, oi: q.oi, status: "live" };
     }
-    if (QuickTrade.lotSize) TradeModal.context.lotSize = QuickTrade.lotSize;
-    if (QuickTrade.lotSize) {
-      const qtyLabel = document.querySelector("#t-qty")?.closest(".field")?.querySelector("span");
-      if (qtyLabel) qtyLabel.textContent = `Quantity (lots of ${QuickTrade.lotSize})`;
+    if (QuickTrade.lotSize) ctx.lotSize = QuickTrade.lotSize;
+    // Preserve whatever the user already typed, then redraw.
+    const lotsEl = document.getElementById("tt-lots");
+    const userLots = lotsEl ? Number(lotsEl.value) : null;
+    renderTradeModal();
+    const fresh = document.getElementById("tt-lots");
+    if (fresh && userLots) {
+      fresh.value = String(userLots);
+      fresh.dispatchEvent(new Event("input"));
     }
   });
 }

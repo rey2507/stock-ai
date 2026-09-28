@@ -29,6 +29,7 @@ INDEX_META: dict[str, InstrumentMeta] = {
     "BANKNIFTY":  InstrumentMeta("BANKNIFTY", "Nifty Bank", "index", 30, 1.0, 0.13),
     "FINNIFTY":   InstrumentMeta("FINNIFTY", "Nifty Financial Services", "index", 60, 1.0, 0.13),
     "MIDCPNIFTY": InstrumentMeta("MIDCPNIFTY", "Nifty Midcap Select", "index", 120, 1.0, 0.14),
+    "SENSEX":     InstrumentMeta("SENSEX", "S&P BSE Sensex", "index", 20, 1.0, 0.12),
 }
 
 # --- Stock futures (per NSE lot-size reference, Sep 2026) ---------------------
@@ -53,6 +54,7 @@ INDEX_SPOT: dict[str, float] = {
     "BANKNIFTY": 51_200.0,
     "FINNIFTY": 23_400.0,
     "MIDCPNIFTY": 12_150.0,
+    "SENSEX": 74_300.0,
 }
 
 # Margin for short options (% of notional; long options = premium paid).

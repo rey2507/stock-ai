@@ -47,20 +47,36 @@ async function openTradeModal(cfg) {
   };
   renderTradeModal();
 
-  // Resolve lot size in the background; correct the stepper live.
-  try {
-    const lot = await lotSizeOf(cfg.symbol);
-    if (!lot) return;
-    TradeModal.context.lotSize = lot;
-    if (TradeModal.context.closeQty) {
-      TradeModal.context.closeLots = Math.max(1, Math.round(TradeModal.context.closeQty / lot));
-      const input = document.getElementById("tt-lots");
-      if (input) input.value = String(TradeModal.context.closeLots);
+  // Resolve lot size in the background; retry a few times (a server blip
+  // must not leave the ticket stuck on "Loading lot size…" forever).
+  const hintEl = () => document.getElementById("tt-qty-hint");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const lot = await lotSizeOf(cfg.symbol);
+      if (!TradeModal.context || TradeModal.context.symbol !== cfg.symbol) return; // closed/switched
+      if (lot) {
+        TradeModal.context.lotSize = lot;
+        if (TradeModal.context.closeQty) {
+          TradeModal.context.closeLots = Math.max(1, Math.round(TradeModal.context.closeQty / lot));
+          const input = document.getElementById("tt-lots");
+          if (input) input.value = String(TradeModal.context.closeLots);
+        }
+        const submitBtn = document.getElementById("tt-confirm");
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.removeAttribute("title"); }
+        updateSummary();
+        break;
+      }
+    } catch (err) {
+      console.error("lot size fetch failed", err);
     }
-    const submitBtn = document.getElementById("tt-confirm");
-    if (submitBtn) submitBtn.disabled = false;
-    updateSummary();
-  } catch { /* keep lotSize null */ }
+    if (attempt < 2) {
+      if (hintEl()) hintEl().textContent = `Loading lot size… (retry ${attempt + 1}/3)`;
+      await new Promise((r) => setTimeout(r, 1500));
+      if (!document.querySelector(".modal")) return; // closed while waiting
+    } else if (hintEl()) {
+      hintEl().textContent = "⚠ Could not load lot size — close and reopen the ticket.";
+    }
+  }
 }
 
 function closeModal() {
@@ -69,8 +85,12 @@ function closeModal() {
 
 function contractTitle(ctx) {
   const isFut = ctx.instrumentType === "FUT";
-  return isFut ? `${ctx.symbol} FUT`
-    : `${ctx.symbol} ${ctx.strike} ${ctx.instrumentType}`;
+  if (isFut) return `${ctx.symbol} FUT`;
+  // While the ATM strike is still resolving (quick trade), show a clean
+  // placeholder instead of a confusing "NIFTY 0 PE".
+  const strike = Number(ctx.strike) || null;
+  return strike ? `${ctx.symbol} ${strike} ${ctx.instrumentType}`
+    : `${ctx.symbol} ${ctx.instrumentType} (resolving strike…)`;
 }
 
 function closeNotice(ctx) {
