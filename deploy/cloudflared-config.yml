@@ -1,0 +1,39 @@
+# cloudflared-config.yml — Cloudflare Tunnel configuration
+# Install: cp deploy/cloudflared-config.yml ~/.cloudflared/config.yml
+#          sudo cp deploy/cloudflared-config.yml /etc/cloudflared/config.yml (for systemd)
+# Run:     cloudflared tunnel run --config ~/.cloudflared/config.yml <TUNNEL_NAME>
+# Service: sudo cloudflared service install (then systemctl enable --now cloudflared)
+
+# REPLACE THESE VALUES:
+# <TUNNEL_ID>        — from: cloudflared tunnel create paper-trader
+# <TUNNEL_HOSTNAME>  — your domain, e.g., trader.example.com
+# <CREDENTIALS_FILE> — path to ~/.cloudflared/<TUNNEL_ID>.json
+
+tunnel: <TUNNEL_ID>
+credentials-file: <CREDENTIALS_FILE>
+
+# Ingress rules — routes traffic to local services
+ingress:
+  # Main app (FastAPI serves both API and static frontend)
+  - hostname: <TUNNEL_HOSTNAME>
+    service: http://localhost:8000
+    originRequest:
+      # Cloudflare connects to localhost:8000 over HTTP
+      # No TLS needed on the origin (Cloudflare terminates TLS)
+      httpHostHeader: <TUNNEL_HOSTNAME>
+      # Increase timeouts for long-running requests (option chain, etc.)
+      connectTimeout: 30s
+      tlsVerifyCa: ""
+      noTLSVerify: true
+
+  # Optional: Direct API subdomain (if you want api.trader.example.com)
+  # - hostname: api.<TUNNEL_HOSTNAME>
+  #   service: http://localhost:8000
+
+  # Catch-all: return 404 for unmatched hostnames
+  - service: http_status:404
+
+# Optional: Tunnel-level settings
+# loglevel: info
+# transport: quic
+# metrics: localhost:41414  # Prometheus metrics endpoint

@@ -1,0 +1,42 @@
+# paper-trader.service — systemd service for FastAPI app
+# Install: sudo cp deploy/paper-trader.service /etc/systemd/system/
+# Enable:  sudo systemctl enable --now paper-trader
+
+[Unit]
+Description=Paper Trader FastAPI Application
+Documentation=https://github.com/rey2507/stock-ai
+After=network.target
+Wants=network.target
+
+[Service]
+Type=exec
+# Run as non-root user (create with: sudo useradd -r -s /bin/false paper-trader)
+User=paper-trader
+Group=paper-trader
+# Working directory — adjust to your clone location
+WorkingDirectory=/opt/paper-trader
+# Virtual environment python
+Environment=PATH=/opt/paper-trader/.venv/bin:/usr/local/bin:/usr/bin:/bin
+# Load secrets from environment file (create /etc/paper-trader.env with 600 perms)
+EnvironmentFile=-/etc/paper-trader.env
+# Startup command
+ExecStart=/opt/paper-trader/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 8000
+# Restart policy
+Restart=on-failure
+RestartSec=5
+StartLimitIntervalSec=60
+StartLimitBurst=3
+# Resource limits (adjust as needed)
+LimitNOFILE=65536
+LimitNPROC=4096
+# Security hardening
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/paper-trader/data /opt/paper-trader/logs
+NoNewPrivileges=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+
+[Install]
+WantedBy=multi-user.target
