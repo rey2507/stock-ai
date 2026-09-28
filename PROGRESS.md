@@ -3,10 +3,9 @@
 > **Handoff document.** Written so another AI can resume with full context:
 > what each stage built, how it works internally, verified behavior, known
 > quirks, and where the next stage should plug in.
-> State: **Stages 1–18 complete, 143/143 tests passing.** Stage 18 moved the
-> NIFTY 50 verdict off the Chart page onto a renamed **Verdict** page and
-> combined it with the macro factors into one overall verdict. Stage 17 =
-> chart upgrade, Stage 16 = macro factors page.
+> State: **Stages 1–19 complete, 143/143 tests passing.** Stage 19 added
+> missing SENSEX index support across all providers and prepared Linux VM +
+> Cloudflare Tunnel deployment files.
 
 ---
 
@@ -874,6 +873,37 @@ Angel via FakeSmartApi in tests/test_angel_provider.py, macro fetchers
 monkeypatched in tests/test_macro.py, verdict tested on synthetic candles
 in tests/test_verdict.py, overall combiner on canned inputs in
 tests/test_overall_verdict.py).
+
+---
+
+## Stage 19: SENSEX Index Support + Cloudflare Tunnel Deployment Prep ✅
+**Status:** Complete
+**Tests:** 143/143 passing
+**Output:** All 5 NSE indices (NIFTY, BANKNIFTY, FINNIFTY, MIDCPNIFTY, SENSEX) work end-to-end; Linux VM + Cloudflare Tunnel deployment ready
+**Files:** backend/nse_data.py, backend/market_data.py, backend/providers/nselib_provider.py, backend/providers/angel_provider.py, backend/providers/yfinance_provider.py, backend/main.py, deploy/paper-trader.service, deploy/cloudflared-config.yml, deploy/paper-trader.env, deploy/deploy.sh, deploy/DEPLOYMENT.md
+
+### 19a. SENSEX index added across entire provider stack
+- **backend/nse_data.py:** Added to `INDEX_META` (lot=20, margin=12%) and `INDEX_SPOT` (74,300)
+- **backend/market_data.py:** Added to `BASE_IV` (0.14) and `get_spot()` index check
+- **backend/providers/nselib_provider.py:** Added to `INDEX_NAME_MAP` ("S&P BSE SENSEX")
+- **backend/providers/angel_provider.py:** Added to `INDEX_TOKENS` (BSE, 99919000)
+- **backend/providers/yfinance_provider.py:** Added to `_INDEX_TICKER_MAP` (^BSESN)
+- Lot size validation works correctly for all 5 indices: NIFTY=65, BANKNIFTY=30, FINNIFTY=60, MIDCPNIFTY=120, SENSEX=20
+
+### 19b. Cloudflare Tunnel deployment preparation (no code rewrites)
+- **backend/main.py:** Added `ProxyHeadersMiddleware` (from uvicorn) + `TrustedHostMiddleware` for Cloudflare Tunnel — handles `X-Forwarded-*` headers and validates `Host` header behind the tunnel
+- **deploy/paper-trader.service:** systemd service for FastAPI (runs as `paper-trader` user, secure hardening, env file from `/etc/paper-trader.env`)
+- **deploy/cloudflared-config.yml:** Cloudflare Tunnel config template (ingress rules, timeouts, HTTP→VM connection)
+- **deploy/paper-trader.env:** Environment variables template (Angel One credentials, no secrets committed)
+- **deploy/deploy.sh:** Automated VM setup script (user, venv, deps, DB init, systemd install)
+- **deploy/DEPLOYMENT.md:** Complete step-by-step deployment guide
+
+### Verified
+- All 143 tests pass
+- SENSEX option chain loads live data (via nselib/Angel/yfinance)
+- Order placement works for SENSEX (lot validation, margin, Greeks)
+- Frontend correctly fetches lot sizes via `lotSizeOf()` → `/api/instruments`
+- App loads without errors
 
 ---
 
