@@ -1,0 +1,13 @@
+fastapi>=0.100
+uvicorn[standard]>=0.23
+httpx>=0.25
+pytest>=7.4
+pandas>=2.0
+nselib>=2.5
+requests>=2.31
+yfinance>=0.2
+smartapi-python
+logzero
+pyotp
+pycryptodome
+websocket-client

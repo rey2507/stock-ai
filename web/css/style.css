@@ -1,0 +1,245 @@
+/* Paper-Trader — Stage 2 styles */
+
+:root {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --border: #334155;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --ok: #22c55e;
+  --error: #ef4444;
+  --pending: #eab308;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 2rem 1rem;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem 2.5rem;
+  width: min(440px, 90vw);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.card.wide {
+  width: min(860px, 96vw);
+}
+
+.card h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.6rem;
+}
+
+.card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.card-header p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+section {
+  margin-top: 1.75rem;
+}
+
+section h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Status badge ----------------------------------------------------------- */
+
+.status-badge {
+  display: inline-block;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.status-ok {
+  color: var(--ok);
+  border-color: var(--ok);
+  background: rgba(34, 197, 94, 0.12);
+}
+
+.status-error {
+  color: var(--error);
+  border-color: var(--error);
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.status-pending {
+  color: var(--pending);
+  border-color: var(--pending);
+  background: rgba(234, 179, 8, 0.12);
+}
+
+/* Account summary --------------------------------------------------------- */
+
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.metric {
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.metric-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.metric-value {
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Order form --------------------------------------------------------------- */
+
+#order-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+#order-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#order-form select,
+#order-form input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 0.5rem 0.6rem;
+  font-size: 0.95rem;
+  width: 110px;
+}
+
+#order-form input[type="number"] {
+  width: 95px;
+}
+
+#order-form select:focus,
+#order-form input:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+#order-form button {
+  background: #2563eb;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.55rem 1.2rem;
+}
+
+#order-form button:hover {
+  background: #1d4ed8;
+}
+
+.feedback {
+  margin-top: 0.75rem;
+  min-height: 1.3rem;
+  font-size: 0.92rem;
+}
+
+.feedback-ok {
+  color: var(--ok);
+}
+
+.feedback-error {
+  color: var(--error);
+}
+
+/* Positions table ----------------------------------------------------------- */
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.data-table th,
+.data-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.55rem 0.6rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.data-table th:first-child,
+.data-table td:first-child {
+  text-align: left;
+}
+
+.data-table th {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.empty-row td {
+  text-align: center;
+  color: var(--muted);
+  padding: 1.2rem 0.6rem;
+}
+
+.pnl-positive {
+  color: var(--ok);
+}
+
+.pnl-negative {
+  color: var(--error);
+}

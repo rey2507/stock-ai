@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="data:," />
+  <title>Paper-Trader — F&O</title>
+  <link rel="stylesheet" href="css/design-system.css" />
+  <link rel="stylesheet" href="css/components.css" />
+  <link rel="stylesheet" href="css/chart.css" />
+  <link rel="stylesheet" href="css/macro.css" />
+</head>
+<body>
+  <header class="mobile-topbar">
+    <button id="sidebar-toggle" class="hamburger" aria-label="Toggle menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+    <span class="topbar-brand">Paper-Trader</span>
+    <span id="health-badge-mobile" class="badge muted">● …</span>
+  </header>
+  <div id="sidebar-overlay" class="sidebar-overlay" hidden></div>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <button id="sidebar-close" class="sidebar-close" aria-label="Close menu">✕</button>
+      <div class="brand">Paper-Trader<span class="tag">F&O · live data + simulation</span></div>
+
+      <nav class="nav">
+        <button data-route="watchlist">📋 Watchlist</button>
+        <button data-route="chain">⛓ Option Chain</button>
+        <button data-route="positions">📊 Positions</button>
+        <button data-route="account">💰 Account</button>
+        <button data-route="chart">🕯 Chart</button>
+        <button data-route="macro">⚖ Verdict</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="metric"><span class="metric-label">Available</span><span class="metric-value" id="s-cash">—</span></div>
+        <div class="metric"><span class="metric-label">Margin used</span><span class="metric-value" id="s-margin">—</span></div>
+        <div class="metric"><span class="metric-label">Equity</span><span class="metric-value" id="s-equity">—</span></div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span id="health-badge" class="badge muted">● …</span>
+          <button id="theme-toggle" class="btn small">☀️ Light</button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <!-- Watchlist -->
+      <section id="page-watchlist" class="page">
+        <div class="page-head">
+          <h1>Watchlist</h1>
+          <div class="watch-actions" id="watch-search-wrap">
+            <input id="watch-input" placeholder="Search e.g. TCS, NIFTY…" autocomplete="off" />
+            <button id="watch-add" class="btn primary small">+ Add</button>
+            <div id="watch-suggestions" class="watch-suggestions" hidden></div>
+          </div>
+        </div>
+        <div class="card table-wrap">
+          <table class="data" id="watch-table">
+            <thead>
+              <tr><th>Symbol</th><th>Name</th><th>Type</th><th>Lot</th><th>LTP</th><th>Chg%</th><th>Src</th><th>Trade</th><th></th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Option chain -->
+      <section id="page-chain" class="page">
+        <div class="page-head">
+          <h1>Option Chain</h1>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <select id="chain-symbol"></select>
+            <select id="chain-expiry"></select>
+            <select id="chain-strikes" style="width:auto;">
+              <option value="5">ATM ± 5</option>
+              <option value="10">ATM ± 10</option>
+              <option value="15" selected>ATM ± 15</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+        </div>
+        <p class="muted" id="chain-spot" style="margin-top:0;"></p>
+        <p class="muted" id="chain-source" style="margin-top:0;"></p>
+        <div id="chain-summary" class="chain-summary" hidden></div>
+        <div class="chain-header-band">
+          <div class="chain-header-section call-side">CALLS</div>
+          <div class="chain-header-section strike-center">STRIKE</div>
+          <div class="chain-header-section put-side">PUTS</div>
+        </div>
+        <div class="card table-wrap">
+          <table class="data" id="chain-table">
+            <thead>
+              <tr>
+                <th class="oi-cell">OI</th>
+                <th class="oi-cell">ΔOI</th>
+                <th class="ltp-cell">LTP</th>
+                <th class="chain-strike">Strike</th>
+                <th class="ltp-cell">LTP</th>
+                <th class="oi-cell">ΔOI</th>
+                <th class="oi-cell">OI</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p class="muted" style="font-size:var(--text-xs);">
+          Hover a Call or Put price to reveal <span class="trade-btn buy" style="padding:1px 6px;">B</span>uy / <span class="trade-btn sell" style="padding:1px 6px;">S</span>ell buttons. Highlighted row = ATM. Strike selector counts are <strong>ATM ± N</strong>.
+        </p>
+      </section>
+
+      <!-- Positions -->
+      <section id="page-positions" class="page">
+        <div class="page-head"><h1>Positions &amp; Orders</h1></div>
+
+        <div class="card" style="margin-bottom:16px;">
+          <div class="metrics" style="margin-bottom:0;">
+            <div class="metric"><span class="metric-label">Unrealized P&L</span><span class="metric-value" id="pg-unrealized">—</span></div>
+            <div class="metric"><span class="metric-label">Portfolio Δ</span><span class="metric-value" id="pg-delta">—</span></div>
+            <div class="metric"><span class="metric-label">Portfolio Γ</span><span class="metric-value" id="pg-gamma">—</span></div>
+            <div class="metric"><span class="metric-label">Portfolio V /pt</span><span class="metric-value" id="pg-vega">—</span></div>
+            <div class="metric"><span class="metric-label">Portfolio Θ /day</span><span class="metric-value" id="pg-theta">—</span></div>
+          </div>
+          <p class="muted" style="font-size:var(--text-xs); margin:8px 0 0;">Portfolio Greeks aggregate every open position's signed contribution.</p>
+        </div>
+
+        <h3 style="margin:12px 0 8px;">Open positions</h3>
+        <div class="card table-wrap">
+          <table class="data" id="positions-table">
+            <thead>
+              <tr><th>Instrument</th><th>Side</th><th>Qty</th><th>Avg</th><th>LTP</th><th>P&L</th><th>Δ</th><th>Γ</th><th>V</th><th>Θ</th><th>IV</th><th>Src</th><th></th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <h3 style="margin:16px 0 8px;">Recent orders</h3>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <span></span>
+          <button id="orders-clear-all" class="btn small danger" style="font-size:var(--text-xs);">Clear All</button>
+        </div>
+        <div class="card table-wrap">
+          <table class="data" id="orders-table">
+            <thead>
+              <tr><th>#</th><th>Instrument</th><th>Side</th><th>Qty</th><th>Type</th><th>Price / Trigger</th><th>Status</th><th>Leg</th><th></th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Account -->
+      <section id="page-account" class="page">
+        <div class="page-head"><h1>Account</h1></div>
+        <div class="card">
+          <div class="metrics">
+            <div class="metric"><span class="metric-label">Starting capital</span><span class="metric-value" id="a-capital">—</span></div>
+            <div class="metric"><span class="metric-label">Cash</span><span class="metric-value" id="a-cash">—</span></div>
+            <div class="metric"><span class="metric-label">Available</span><span class="metric-value" id="a-available">—</span></div>
+            <div class="metric"><span class="metric-label">Margin used</span><span class="metric-value" id="a-margin">—</span></div>
+            <div class="metric"><span class="metric-label">Portfolio</span><span class="metric-value" id="a-portfolio">—</span></div>
+            <div class="metric"><span class="metric-label">Unrealized P&L</span><span class="metric-value" id="a-unrealized">—</span></div>
+            <div class="metric"><span class="metric-label">Equity</span><span class="metric-value" id="a-equity">—</span></div>
+            <div class="metric"><span class="metric-label">Total P&L</span><span class="metric-value" id="a-pnl">—</span></div>
+          </div>
+          <p class="muted" id="a-source" style="margin:8px 0 0; font-size:var(--text-xs);">Marking source: —</p>
+        </div>
+      </section>
+
+      <!-- Chart -->
+      <section id="page-chart" class="page">
+    <div class="page-head">
+      <h1>Chart</h1>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <select id="chart-symbol"></select>
+        <span id="chart-source"></span>
+      </div>
+    </div>
+
+    <div class="chart-controls card">
+      <div class="chart-control-group" role="group" aria-label="Interval">
+        <span class="chart-control-label">Interval</span>
+        <div class="seg" id="chart-intervals">
+          <button data-interval="1m">1m</button>
+          <button data-interval="5m" class="active">5m</button>
+          <button data-interval="15m">15m</button>
+          <button data-interval="1h">1h</button>
+          <button data-interval="1D">1D</button>
+        </div>
+      </div>
+      <div class="chart-control-group" role="group" aria-label="Date range">
+        <span class="chart-control-label">Range</span>
+        <div class="seg" id="chart-ranges">
+          <button data-days="5">5d</button>
+          <button data-days="10" class="active">10d</button>
+          <button data-days="20">20d</button>
+          <button data-days="50">50d</button>
+        </div>
+      </div>
+      <div class="chart-control-group">
+        <span class="chart-control-label">Custom</span>
+        <input id="chart-from" type="date" aria-label="From date" />
+        <input id="chart-to" type="date" aria-label="To date" />
+        <button id="chart-apply" class="btn small">Apply</button>
+      </div>
+      <div class="chart-control-group">
+        <span class="chart-control-label">Renderer</span>
+        <div class="seg" id="chart-renderers">
+          <button data-renderer="canvas" class="active">Canvas</button>
+          <button data-renderer="tv">TradingView</button>
+        </div>
+      </div>
+      <div class="chart-control-group">
+        <button id="chart-refresh" class="btn small">↻ Refresh</button>
+      </div>
+    </div>
+
+    <div class="chart-legend card">
+      <span class="chart-control-label">Indicators</span>
+      <div id="chart-indicators" class="ind-toggles"></div>
+      <div id="chart-ind-values" class="ind-values" aria-live="polite"></div>
+    </div>
+
+    <div class="card chart-card">
+      <div id="chart-tooltip" class="chart-tooltip" hidden></div>
+      <div id="chart-lw-legend" class="chart-lw-legend" hidden></div>
+      <canvas id="chart-canvas" aria-label="Candlestick chart"></canvas>
+      <div id="chart-lw" class="chart-lw" hidden></div>
+      <div id="chart-lw-rsi" class="chart-lw-pane" hidden></div>
+      <div id="chart-lw-macd" class="chart-lw-pane" hidden></div>
+      <div id="chart-empty" class="chart-empty" hidden>
+        <p><strong>No data for this range.</strong></p>
+        <p class="muted" id="chart-empty-detail"></p>
+      </div>
+    </div>
+    <p class="muted" id="chart-meta" style="font-size:var(--text-xs);"></p>
+      </section>
+
+    <!-- ============ NIFTY 50 Verdict (Stage 18; macro factors since Stage 16) ============ -->
+    <section id="page-macro" class="page">
+      <div class="macro-head">
+        <h1>NIFTY 50 Verdict</h1>
+        <div class="macro-meta">
+          <span id="macro-generated" class="muted"></span>
+          <span id="macro-stale" class="badge stale" hidden>◷ stale data</span>
+        </div>
+      </div>
+      <p class="macro-disclaimer muted">Combined descriptive reading of NIFTY 50
+        technical indicators and macro factors — not a prediction and not
+        guaranteed. Global figures are daily closes from their own exchanges
+        and may lag during Indian hours.</p>
+
+      <!-- Stage 18: overall NIFTY 50 verdict (technical + macro combined) -->
+      <div class="card overall-verdict">
+        <div class="verdict-head">
+          <span class="verdict-title">Overall verdict</span>
+          <span id="ov-badge" class="msig msig-unavailable">… loading</span>
+        </div>
+        <div class="verdict-confidence">
+          <div class="conf-bar"><div id="ov-conf-fill" class="conf-fill"></div></div>
+          <span id="ov-conf-label" class="muted" style="font-size:var(--text-xs);"></span>
+        </div>
+        <div class="ov-blocks">
+          <div class="ov-block">
+            <label>Technicals (NIFTY 50 daily)</label>
+            <span id="ov-tech">—</span>
+          </div>
+          <div class="ov-block">
+            <label>Macro factors</label>
+            <span id="ov-macro">—</span>
+          </div>
+        </div>
+        <p class="muted" id="ov-oneliner" style="font-size:var(--text-xs);"></p>
+      </div>
+
+      <!-- NIFTY 50 technical indicators (moved from the Chart page) -->
+      <div class="card verdict-card" id="verdict-card">
+        <div class="verdict-head">
+          <span class="verdict-title">NIFTY 50 technicals</span>
+          <span id="verdict-badge" class="msig msig-unavailable">… loading</span>
+        </div>
+        <div class="verdict-confidence">
+          <div class="conf-bar"><div id="verdict-conf-fill" class="conf-fill"></div></div>
+          <span id="verdict-conf-label" class="muted" style="font-size:var(--text-xs);"></span>
+        </div>
+        <ul id="verdict-checks" class="verdict-checks"></ul>
+        <p class="muted" id="verdict-oneliner" style="font-size:var(--text-xs);"></p>
+        <p class="muted" id="verdict-disclaimer" style="font-size:var(--text-xs);"></p>
+      </div>
+
+      <div class="card macro-summary">
+        <div class="macro-summary-title">Macro factor tally</div>
+        <div class="macro-summary-counts" id="macro-counts">
+          <div class="mcount pos"><span id="mc-pos">–</span><label>Positive</label></div>
+          <div class="mcount neg"><span id="mc-neg">–</span><label>Negative</label></div>
+          <div class="mcount neu"><span id="mc-neu">–</span><label>Neutral</label></div>
+          <div class="mcount unk"><span id="mc-unk">–</span><label>Unclear</label></div>
+          <div class="mcount off"><span id="mc-off">–</span><label>Unavailable</label></div>
+        </div>
+        <p class="muted" id="macro-counts-note" style="font-size:var(--text-xs);"></p>
+      </div>
+
+      <div class="card macro-summary">
+        <div class="macro-summary-title">Pre-market summary</div>
+        <div class="macro-summary-counts" id="macro-counts">
+          <div class="mcount pos"><span id="mc-pos">–</span><label>Positive</label></div>
+          <div class="mcount neg"><span id="mc-neg">–</span><label>Negative</label></div>
+          <div class="mcount neu"><span id="mc-neu">–</span><label>Neutral</label></div>
+          <div class="mcount unk"><span id="mc-unk">–</span><label>Unclear</label></div>
+          <div class="mcount off"><span id="mc-off">–</span><label>Unavailable</label></div>
+        </div>
+        <p class="muted" id="macro-counts-note" style="font-size:var(--text-xs);"></p>
+      </div>
+
+      <div id="macro-sections"></div>
+
+      <div class="card macro-journal">
+        <div class="macro-journal-head">
+          <div>
+            <div class="macro-journal-title">Pre-market journal</div>
+            <p class="muted" style="font-size:var(--text-xs);">Record your opening
+              expectation before the session; the app later compares it with the
+              actual NIFTY 50 open and shows a plain correct/wrong tally.</p>
+          </div>
+          <div id="journal-stats" class="journal-stats"></div>
+        </div>
+        <form id="journal-form" class="journal-form">
+          <label>Expectation
+            <select id="j-expected">
+              <option value="UP">UP</option>
+              <option value="DOWN">DOWN</option>
+              <option value="FLAT">FLAT</option>
+            </select>
+          </label>
+          <label>Confidence (1–5)
+            <input id="j-confidence" type="number" min="1" max="5" value="3" />
+          </label>
+          <label class="j-reasons">Reasons
+            <input id="j-reasons" type="text" maxlength="500"
+                   placeholder="e.g. US futures soft, crude up, FII net short…" />
+          </label>
+          <button type="submit" class="btn primary" id="j-save">Save today's view</button>
+        </form>
+        <div id="journal-list"></div>
+      </div>
+    </section>
+    </main>
+  </div>
+
+  <div id="modal-root"></div>
+
+  <!-- Floating quick-trade bar (all routes) -->
+  <nav class="quick-trade-bar" id="quick-trade-bar" aria-label="Quick trade">
+    <span class="qt-label"><span class="qt-dot" aria-hidden="true"></span>Quick trade</span>
+    <div class="qt-actions">
+      <button class="qt-btn qt-ce" id="qt-buy-ce" title="Buy ATM Call">
+        <span class="qt-ico" aria-hidden="true">▲</span>
+        <span class="qt-txt">Buy CE</span>
+      </button>
+      <button class="qt-btn qt-pe" id="qt-buy-pe" title="Buy ATM Put">
+        <span class="qt-ico" aria-hidden="true">▼</span>
+        <span class="qt-txt">Buy PE</span>
+      </button>
+    </div>
+  </nav>
+
+  <script src="js/vendor/lightweight-charts.standalone.production.js"></script>
+  <script src="js/indicators.js"></script>
+  <script src="js/lightweight-renderer.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/format.js"></script>
+  <script src="js/badges.js"></script>
+  <script src="js/trade-modal.js"></script>
+  <script src="js/quick-trade.js"></script>
+  <script src="js/watchlist.js"></script>
+  <script src="js/option-chain.js"></script>
+  <script src="js/positions.js"></script>
+  <script src="js/chart.js"></script>
+  <script src="js/macro.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

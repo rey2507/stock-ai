@@ -1,0 +1,327 @@
+/* ============================================================
+   Macro Factors page (Stage 16) — mm- prefix
+   ============================================================ */
+
+.macro-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.macro-head h1 { margin: 0; }
+
+.macro-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-xs);
+}
+
+.macro-disclaimer {
+  font-size: var(--text-xs);
+  margin: 6px 0 14px;
+}
+
+/* --- summary --- */
+
+.macro-summary { padding: 14px 16px; margin-bottom: 14px; }
+
+.macro-summary-title {
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.macro-summary-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mcount {
+  flex: 1 1 90px;
+  min-width: 84px;
+  text-align: center;
+  padding: 10px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.mcount span { font-size: 1.5em; font-weight: 700; display: block; }
+.mcount label { font-size: var(--text-xs); color: var(--text-muted); }
+
+.mcount.pos span { color: var(--up); }
+.mcount.neg span { color: var(--down); }
+.mcount.neu span { color: var(--text-muted); }
+.mcount.unk span { color: var(--warn); }
+.mcount.off span { color: var(--text-muted); }
+
+/* --- factor tables --- */
+
+.macro-card { padding: 12px 16px; margin-bottom: 14px; overflow-x: auto; }
+
+.macro-card-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.macro-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.macro-table th {
+  text-align: left;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  font-weight: 500;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.macro-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+
+.macro-table tr:last-child td { border-bottom: none; }
+
+.macro-table .m-name { font-weight: 500; white-space: nowrap; }
+.macro-table .m-val { font-weight: 600; white-space: nowrap; }
+.macro-table .m-prev { color: var(--text-muted); white-space: nowrap; }
+.macro-table .m-chg { white-space: nowrap; }
+.macro-table .m-chg.up { color: var(--up); }
+.macro-table .m-chg.down { color: var(--down); }
+.macro-table .m-ts { font-size: var(--text-xs); white-space: nowrap; }
+.macro-table .m-src { font-size: var(--text-xs); white-space: nowrap; }
+.macro-table .m-reasons { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- signal badges (shared with chart verdict cards, Stage 17) --- */
+
+.msig {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: var(--text-xs);
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+
+.msig-positive { background: var(--up-soft); color: var(--up); }
+.msig-negative { background: var(--down-soft); color: var(--down); }
+.msig-neutral  { background: var(--surface-3); color: var(--text-muted); }
+.msig-unclear  { background: var(--warn-soft); color: var(--warn); }
+.msig-unavailable { background: transparent; color: var(--text-muted); border-color: var(--border); }
+
+/* --- journal --- */
+
+.macro-journal { padding: 14px 16px; }
+
+.macro-journal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.macro-journal-title { font-weight: 600; margin-bottom: 4px; }
+
+.journal-stats { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.jstat {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: var(--text-xs);
+  background: var(--surface-3);
+  white-space: nowrap;
+}
+
+.jstat.ok { background: var(--up-soft); color: var(--up); }
+.jstat.bad { background: var(--down-soft); color: var(--down); }
+.jstat.muted { color: var(--text-muted); }
+
+.journal-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.journal-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.journal-form select,
+.journal-form input {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: var(--text-sm);
+}
+
+.journal-form select { width: 90px; }
+.journal-form #j-confidence { width: 64px; }
+.journal-form .j-reasons { flex: 1 1 220px; }
+.journal-form .j-reasons input { width: 100%; }
+
+#journal-list { margin-top: 6px; }
+
+@media (max-width: 640px) {
+  .macro-table .m-prev, .macro-table .m-src { display: none; }
+  .macro-table th:nth-child(3), .macro-table th:nth-child(7) { display: none; }
+}
+
+/* ============================================================
+   Verdict page — overall NIFTY 50 verdict (Stage 18)
+   ============================================================ */
+
+.overall-verdict { padding: 14px 16px; margin-bottom: 14px; }
+
+.ov-blocks {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+
+.ov-block {
+  flex: 1 1 200px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.ov-block label {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.ov-block span { font-weight: 600; font-size: var(--text-sm); }
+
+/* ============================================================
+   Technical verdict card (moved from Chart page, Stage 18)
+   ============================================================ */
+
+.chart-insights {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+@media (max-width: 800px) {
+  .chart-insights { grid-template-columns: 1fr; }
+}
+
+.verdict-card, .pa-card { padding: 12px 16px; }
+
+.verdict-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.verdict-title { font-weight: 600; }
+
+.verdict-confidence {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.conf-bar {
+  flex: 0 0 140px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.conf-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 3px;
+  background: var(--accent-strong, #2563eb);
+  transition: width 0.4s ease;
+}
+
+.verdict-checks {
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+.verdict-checks li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+  font-size: var(--text-sm);
+  border-bottom: 1px dashed var(--border);
+}
+
+.verdict-checks li:last-child { border-bottom: none; }
+
+.verdict-checks .vc-name { font-weight: 500; white-space: nowrap; }
+.verdict-checks .vc-detail { color: var(--text-muted); font-size: var(--text-xs); }
+
+.verdict-checks li.vc-bull .vc-name::before { content: "▲ "; color: var(--up); }
+.verdict-checks li.vc-bear .vc-name::before { content: "▼ "; color: var(--down); }
+.verdict-checks li.vc-neut .vc-name::before { content: "● "; color: var(--text-muted); }
+.verdict-checks li.vc-unk .vc-name::before  { content: "? "; color: var(--warn); }
+
+/* --- price action grid --- */
+
+.pa-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.pa-item {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.pa-item label {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-bottom: 2px;
+}
+
+.pa-item span { font-weight: 600; font-size: var(--text-sm); }
+.pa-item span.up { color: var(--up); }
+.pa-item span.down { color: var(--down); }
