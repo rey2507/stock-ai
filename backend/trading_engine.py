@@ -81,6 +81,11 @@ def validate_request(conn, md: MockMarketData, payload: dict[str, Any]) -> dict[
     if inst is None:
         raise NotFoundError(f"Unknown symbol: {symbol}")
 
+    # Futures don't carry a strike — normalise to 0 so the position key
+    # doesn't fragment into multiple rows for the same contract.
+    if instrument_type == "FUT":
+        strike = 0.0
+
     if instrument_type in ("CE", "PE") and not (expiry and strike > 0):
         raise OrderError("Options need expiry (YYYY-MM-DD) and strike")
     if instrument_type == "FUT" and not expiry:
@@ -188,7 +193,11 @@ def margin_held(conn, md: MockMarketData) -> float:
             px = ltp(md, p["symbol"], "FUT", p["expiry"])
             total += px * p["quantity"] * mult * margin_pct(p["symbol"])
         elif p["instrument_type"] in ("CE", "PE") and p["side"] == "SHORT":
-            spot = md.get_spot(p["symbol"])
+            expiries = md.expiries(1, p["symbol"])
+            if expiries:
+                spot = ltp(md, p["symbol"], "FUT", expiries[0])
+            else:
+                spot = md.get_spot(p["symbol"])
             total += spot * p["quantity"] * mult * SHORT_OPTION_MARGIN_PCT
     return total
 
@@ -501,6 +510,7 @@ def process_pending_orders(conn, md: MockMarketData) -> list[dict[str, Any]]:
             db.set_order_status(conn, order["id"], "FILLED", fill)
             req = _req_from_order(order)
             try:
+                ensure_funds(conn, md, req)
                 _open_position(conn, md, req, fill)
                 _pay_entry_cost(conn, req, fill)
             except OrderError:

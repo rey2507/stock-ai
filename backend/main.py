@@ -574,6 +574,27 @@ _INSTRUMENTS_CACHE_TTL = 30.0
 _instruments_cache: dict[str, tuple[float, dict]] = {}
 
 
+@app.get("/api/instrument/{symbol}")
+def get_instrument(symbol: str) -> dict:
+    """Lightweight instrument metadata (lot size, name, kind).
+
+    Does not call market data providers — safe to use when the market-data
+    stack is slow or temporarily unavailable.
+    """
+    symbol = symbol.upper()
+    with db.db() as conn:
+        inst = db.get_instrument(conn, symbol)
+    if inst is None:
+        raise HTTPException(status_code=404, detail=f"Unknown symbol: {symbol}")
+    return {
+        "symbol": inst["symbol"],
+        "name": inst["name"],
+        "kind": inst["kind"],
+        "lot_size": inst["lot_size"],
+        "margin_pct": inst.get("margin_pct"),
+    }
+
+
 @app.get("/api/instruments")
 def list_instruments(kind: Optional[Literal["index", "stock"]] = None) -> dict:
     """All tradable instruments with spots, cached as a whole for 30s.

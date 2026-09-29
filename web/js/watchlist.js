@@ -64,15 +64,32 @@ let allInstruments = null;   // cached [{symbol, name, kind, lot_size}]
 
 async function fetchInstruments() {
   if (!allInstruments) {
-    const data = await API.instruments();
-    allInstruments = data.instruments.map((i) =>
-      ({ symbol: i.symbol, name: i.name, kind: i.kind, lot_size: i.lot_size }));
+    try {
+      const data = await API.instruments();
+      allInstruments = data.instruments.map((i) =>
+        ({ symbol: i.symbol, name: i.name, kind: i.kind, lot_size: i.lot_size }));
+    } catch (err) {
+      console.error("fetchInstruments failed", err);
+      return [];
+    }
   }
   return allInstruments;
 }
 
 // Server-authoritative lot size for a symbol (null while unknown).
 async function lotSizeOf(symbol) {
+  // Fast path: lightweight single-symbol endpoint (no market-data dependency).
+  try {
+    const r = await Promise.race([
+      fetch(`/api/instrument/${encodeURIComponent(symbol)}`),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 4000)),
+    ]);
+    if (r.ok) {
+      const d = await r.json();
+      if (d.lot_size) return d.lot_size;
+    }
+  } catch { /* fall through to bulk instruments */ }
+
   const inst = (await fetchInstruments()).find((i) => i.symbol === symbol);
   return inst ? inst.lot_size : null;
 }

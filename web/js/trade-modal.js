@@ -239,7 +239,6 @@ function renderTradeModal() {
   function updateQtyHint() {
     if (ctx.lotSize == null) return;
     const n = lots();
-    $("tt-lots").previousElementSibling; // (kept for clarity)
     $("tt-qty-hint").textContent =
       `${n} lot${n === 1 ? "" : "s"} = ${qty()} qty` +
       (ltp != null ? ` · est. value ${fmtINR0(qty() * ltp)}` : "");
@@ -254,7 +253,7 @@ function renderTradeModal() {
       quantity: qty(),
     };
     if (ctx.expiry) p.expiry = ctx.expiry;
-    if (ctx.strike) p.strike = Number(ctx.strike);
+    if (ctx.strike && ctx.instrumentType !== "FUT") p.strike = Number(ctx.strike);
     if (ctx.reduceOnly) p.reduce_only = true;
     const t = ctx.orderType;
     if (t === "LIMIT" || t === "SL") p.price = Number($("tt-price").value) || undefined;
