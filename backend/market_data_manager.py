@@ -29,6 +29,7 @@ from backend.models import (
     OptionQuote,
 )
 from backend.nse_data import INDEX_SPOT
+from backend.providers.mock_provider import MockMarketDataProvider
 
 PROVIDER_COOLDOWN_SECONDS = 30.0
 QUOTE_TTL_SECONDS = 5.0
@@ -384,14 +385,11 @@ class _ManagerAsSource(MarketManager):
 
 
 def default_manager() -> MarketManager:
-    """Production stack: nselib → angel → yfinance. NO mock.
+    """Production stack: nselib → angel → yfinance → mock.
 
-    Real data or nothing: instruments a live provider can't price show as
-    UNAVAILABLE rather than simulated values. Mock remains available for
-    tests (conftest injects it explicitly). Angel One SmartAPI sits between
-    the scrapers and the fallback: when nselib fails/cools down, broker
-    data takes over (requires ANGEL_* credentials in .env; skipped cleanly
-    when absent or SmartApi isn't installed).
+    Live data is preferred when available; mock is the honest last resort so
+    the app never shows ``unavailable`` for instruments the engine can price
+    deterministically. Tests swap the whole manager for a mock-only instance.
     """
     providers: list[MarketDataSource] = []
     try:
@@ -412,6 +410,7 @@ def default_manager() -> MarketManager:
         providers.append(YfinanceProvider())
     except ProviderError:
         pass  # yfinance not installed — skip
+    providers.append(MockMarketDataProvider())
     return MarketManager(providers=providers)
 
 

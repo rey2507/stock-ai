@@ -70,7 +70,7 @@ function openQuickTicket(optionType) {
       const row = (QuickTrade.chainMeta?.rows || [])
         .find((r) => Number(r.strike) === Number(QuickTrade.atmStrike));
       const q = row ? (optionType === "CE" ? row.ce : row.pe) : null;
-      if (q) ctx.quote = { ltp: q.ltp, iv: q.iv, delta: q.delta, oi: q.oi, status: "live" };
+      if (q) ctx.quote = { ltp: q.ltp, iv: q.iv, delta: q.delta, oi: q.oi, status: q.status || "simulated" };
     }
     if (QuickTrade.lotSize) ctx.lotSize = QuickTrade.lotSize;
     // Preserve whatever the user already typed, then redraw.

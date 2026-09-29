@@ -353,11 +353,11 @@ def test_nselib_chain_rows_sorted_window():
 
 
 def test_default_manager_stack():
-    """Production stack: nselib → yfinance, NO mock (real data or UNAVAILABLE)."""
+    """Production stack: live providers first, mock last as honest fallback."""
     from backend.market_data_manager import default_manager
 
     mgr = default_manager()
     names = [p.name for p in mgr.providers]
     assert names[0] == "nselib"
     assert "yfinance" in names
-    assert "mock" not in names
+    assert names[-1] == "mock"

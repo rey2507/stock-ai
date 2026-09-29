@@ -219,7 +219,7 @@ function wireChainTradeButtons(tbody, data) {
       symbol: data.symbol, instrumentType: itype,
       expiry: data.expiry, strike,
       presetSide: side === "ceBuy" || side === "peBuy" ? "BUY" : "SELL",
-      quote: q ? { ltp: q.ltp, oi: q.oi, oi_change: q.oi_change, iv: q.iv, delta: q.delta } : null,
+      quote: q ? { ltp: q.ltp, oi: q.oi, oi_change: q.oi_change, iv: q.iv, delta: q.delta, status: q.status } : null,
     });
   };
   tbody.querySelectorAll("[data-ce-buy]").forEach((b) =>

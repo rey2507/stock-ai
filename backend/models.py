@@ -67,6 +67,8 @@ class OptionQuote(DictAccessMixin):
     volume: Optional[int] = None
     spot: float = 0.0
     t_years: float = 0.0
+    source: str = "mock"
+    status: str = "simulated"
 
     def to_dict(self) -> dict[str, Any]:
         return self.__dict__.copy()
